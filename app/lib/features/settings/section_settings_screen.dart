@@ -97,10 +97,9 @@ class _FieldsTab extends ConsumerWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               buildDefaultDragHandles: false,
-              onReorder: (oldIndex, newIndex) async {
+              onReorderItem: (oldIndex, newIndex) async {
                 if (!editable) return;
                 final items = [...list];
-                if (newIndex > oldIndex) newIndex -= 1;
                 items.insert(newIndex, items.removeAt(oldIndex));
                 if (await runAction(context, () => repo.reorderFields(items))) {
                   ref.invalidate(fieldSettingsProvider(entity));
