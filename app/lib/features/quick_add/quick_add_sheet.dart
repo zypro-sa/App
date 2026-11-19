@@ -5,6 +5,9 @@ import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
+import '../../data/section_models.dart';
+import '../../data/section_repository.dart';
+import '../../widgets/forms.dart' show customFieldRows, missingRequired, promptNumber, money;
 import '../../widgets/common.dart';
 
 enum QuickAddType {
@@ -50,13 +53,52 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   int _duration = 30;
   MeetingType _meetingType = MeetingType.inPerson;
   FollowupDirection _direction = FollowupDirection.promised;
+  String? _serviceType;
+  num? _value;
+  final _location = TextEditingController();
+  final Map<String, dynamic> _custom = {};
   bool _saving = false;
 
   @override
   void dispose() {
     _title.dispose();
     _counterpart.dispose();
+    _location.dispose();
     super.dispose();
+  }
+
+  ConfigEntity? get _entity => switch (_type) {
+        QuickAddType.task => ConfigEntity.task,
+        QuickAddType.request => ConfigEntity.request,
+        QuickAddType.meeting => ConfigEntity.meeting,
+        _ => null,
+      };
+
+  FieldConfig _cfg() {
+    final e = _entity;
+    if (e == null) return FieldConfig(const []);
+    return ref.read(fieldConfigProvider(e)).valueOrNull ?? FieldConfig(const []);
+  }
+
+  /// يتحقق من الحقول التي جعلها المالك إلزامية.
+  String? _missingConfigured() {
+    final cfg = _cfg();
+    bool req(String k) => cfg.isVisible(k) && cfg.isRequired(k);
+    switch (_type) {
+      case QuickAddType.request:
+        if (req('due_date') && _when == null) return 'حدّد ${cfg.labelOf('due_date', 'الموعد النهائي')}';
+        if (req('service_type') && _serviceType == null) return 'اختر ${cfg.labelOf('service_type', 'نوع الخدمة')}';
+        if (req('estimated_value') && _value == null) return 'أدخل ${cfg.labelOf('estimated_value', 'القيمة التقديرية')}';
+      case QuickAddType.task:
+        if (req('due_at') && _when == null) return 'حدّد ${cfg.labelOf('due_at', 'الموعد')}';
+        if (req('client_id') && _clientId == null) return 'اختر ${cfg.labelOf('client_id', 'العميل')}';
+      case QuickAddType.meeting:
+        if (req('client_id') && _clientId == null) return 'اختر ${cfg.labelOf('client_id', 'العميل')}';
+        if (req('location') && _location.text.trim().isEmpty) return 'أدخل ${cfg.labelOf('location', 'المكان')}';
+      default:
+        break;
+    }
+    return missingRequired(cfg.customVisible, _custom);
   }
 
   bool get _needsDate =>
@@ -106,7 +148,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             ? 'حدّد الموعد'
             : (_type == QuickAddType.request && _clientId == null)
                 ? 'اختر العميل'
-                : null;
+                : _missingConfigured();
     if (problem != null) {
       showSnack(context, problem);
       return;
@@ -123,9 +165,18 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             dueAt: _when,
             assigneeId: _assigneeId,
             clientId: _clientId,
+            custom: Map.of(_custom),
           );
         case QuickAddType.request:
-          await repo.createRequest(title: title, clientId: _clientId!, priority: _priority, dueDate: _when);
+          await repo.createRequest(
+            title: title,
+            clientId: _clientId!,
+            priority: _priority,
+            dueDate: _when,
+            serviceType: _serviceType,
+            estimatedValue: _value,
+            custom: Map.of(_custom),
+          );
         case QuickAddType.meeting:
           await repo.createMeeting(
             title: title,
@@ -133,6 +184,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             durationMinutes: _duration,
             type: _meetingType,
             clientId: _clientId,
+            location: _location.text.trim(),
+            custom: Map.of(_custom),
           );
         case QuickAddType.followup:
           await repo.createFollowup(
@@ -144,7 +197,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         case QuickAddType.note:
           await repo.createNote(title);
       }
-      refreshAll(ref);
+      refreshSections(ref);
       if (mounted) {
         final messenger = ScaffoldMessenger.of(context);
         Navigator.pop(context);
@@ -163,6 +216,13 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     final team = ref.watch(teamProvider).valueOrNull ?? const <Profile>[];
     final role = ref.watch(profileProvider).valueOrNull?.role;
     final canAssign = role == UserRole.owner || role == UserRole.manager;
+    final entity = _entity;
+    final cfg = entity == null
+        ? FieldConfig(const [])
+        : (ref.watch(fieldConfigProvider(entity)).valueOrNull ?? FieldConfig(const []));
+    final dueKey = _type == QuickAddType.request ? 'due_date' : (_type == QuickAddType.task ? 'due_at' : 'start_at');
+    String star(String key, String label) => cfg.isRequired(key) ? '$label *' : label;
+    const divider = Divider(height: 1, color: AppColors.divider);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
@@ -189,7 +249,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                       child: _TypeButton(
                         label: t.label,
                         selected: t == _type,
-                        onTap: () => setState(() => _type = t),
+                        onTap: () => setState(() {
+                          _type = t;
+                          _custom.clear();
+                        }),
                       ),
                     ),
                   ),
@@ -213,33 +276,54 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Column(
                   children: [
+                    if (_type == QuickAddType.followup || cfg.isVisible(dueKey))
                     _FieldRow(
-                      label: _type == QuickAddType.request ? 'الموعد النهائي' : 'الموعد',
+                      label: star(dueKey, cfg.labelOf(dueKey, _type == QuickAddType.request ? 'الموعد النهائي' : 'الموعد')),
                       value: _when == null
                           ? (_needsDate ? 'مطلوب' : 'بدون موعد')
                           : '${relativeDay(_when!)}${_when!.hour != 0 || _when!.minute != 0 ? ' · ${formatTime(_when!)}' : ''}',
                       onTap: _pickDateTime,
                     ),
-                    if (_type != QuickAddType.followup) ...[
-                      const Divider(height: 1, color: AppColors.divider),
+                    if (_type != QuickAddType.followup && (_type == QuickAddType.request || cfg.isVisible('client_id'))) ...[
+                      divider,
                       _DropdownRow<String>(
-                        label: _type == QuickAddType.request ? 'العميل (مطلوب)' : 'مرتبط بعميل',
+                        label: _type == QuickAddType.request ? 'العميل (مطلوب)' : star('client_id', cfg.labelOf('client_id', 'مرتبط بعميل')),
                         value: _clientId,
                         items: {for (final c in clients) c.id: c.name},
                         onChanged: (v) => setState(() => _clientId = v),
                       ),
                     ],
-                    if (_type == QuickAddType.task || _type == QuickAddType.request) ...[
-                      const Divider(height: 1, color: AppColors.divider),
+                    if (_type == QuickAddType.request && cfg.isVisible('service_type') && cfg.optionsOf('service_type').isNotEmpty) ...[
+                      divider,
+                      _DropdownRow<String>(
+                        label: star('service_type', cfg.labelOf('service_type', 'نوع الخدمة')),
+                        value: _serviceType,
+                        items: {for (final o in cfg.optionsOf('service_type')) o: o},
+                        onChanged: (v) => setState(() => _serviceType = v),
+                      ),
+                    ],
+                    if (_type == QuickAddType.request && cfg.isVisible('estimated_value')) ...[
+                      divider,
+                      _FieldRow(
+                        label: star('estimated_value', cfg.labelOf('estimated_value', 'القيمة التقديرية')),
+                        value: _value == null ? 'أدخل' : money(_value!),
+                        onTap: () async {
+                          final v = await promptNumber(context, cfg.labelOf('estimated_value', 'القيمة التقديرية'));
+                          if (v != null) setState(() => _value = v);
+                        },
+                      ),
+                    ],
+                    if ((_type == QuickAddType.task || _type == QuickAddType.request) && cfg.isVisible('priority')) ...[
+                      divider,
                       _DropdownRow<Priority>(
-                        label: 'الأولوية',
+                        label: cfg.labelOf('priority', 'الأولوية'),
                         value: _priority,
                         items: {for (final p in Priority.values) p: p.label},
                         onChanged: (v) => setState(() => _priority = v ?? Priority.medium),
                         allowEmpty: false,
                       ),
                     ],
-                    if (_type == QuickAddType.task && canAssign && team.length > 1) ...[
+                    if (_type == QuickAddType.task && canAssign && team.length > 1 && cfg.isVisible('assignee_id')) ...[
                       const Divider(height: 1, color: AppColors.divider),
                       _DropdownRow<String>(
                         label: 'المسؤول',
@@ -247,6 +331,23 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                         emptyLabel: 'أنا',
                         items: {for (final p in team) p.id: p.name},
                         onChanged: (v) => setState(() => _assigneeId = v),
+                      ),
+                    ],
+                    if (_type == QuickAddType.meeting && cfg.isVisible('location')) ...[
+                      divider,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: TextField(
+                          controller: _location,
+                          decoration: InputDecoration(
+                            hintText: star('location', cfg.labelOf('location', 'المكان')),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            filled: false,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
                       ),
                     ],
                     if (_type == QuickAddType.meeting) ...[
@@ -259,8 +360,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                         allowEmpty: false,
                       ),
                       const Divider(height: 1, color: AppColors.divider),
+                      if (cfg.isVisible('type'))
                       _DropdownRow<MeetingType>(
-                        label: 'النوع',
+                        label: cfg.labelOf('type', 'النوع'),
                         value: _meetingType,
                         items: {for (final t in MeetingType.values) t: t.label},
                         onChanged: (v) => setState(() => _meetingType = v ?? MeetingType.inPerson),
@@ -292,6 +394,12 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                         ),
                       ),
                     ],
+                    for (final row in customFieldRows(
+                      context: context,
+                      fields: cfg.customVisible,
+                      values: _custom,
+                      onChanged: (k, v) => setState(() => _custom[k] = v),
+                    )) ...[divider, row],
                   ],
                 ),
               ),

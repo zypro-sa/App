@@ -125,6 +125,10 @@ class Repository {
     required String clientId,
     required Priority priority,
     DateTime? dueDate,
+    String? serviceType,
+    num? estimatedValue,
+    String? description,
+    Map<String, dynamic> custom = const {},
   }) =>
       _db.from('requests').insert({
         'title': title,
@@ -132,6 +136,10 @@ class Repository {
         'priority': priority.db,
         'assignee_id': _uid,
         if (dueDate != null) 'due_date': _isoDate(dueDate),
+        if (serviceType != null) 'service_type': serviceType,
+        if (estimatedValue != null) 'estimated_value': estimatedValue,
+        if (description != null && description.isNotEmpty) 'description': description,
+        if (custom.isNotEmpty) 'custom': custom,
       });
 
   // ---------------- المهام ----------------
@@ -158,6 +166,7 @@ class Repository {
     DateTime? dueAt,
     String? assigneeId,
     String? clientId,
+    Map<String, dynamic> custom = const {},
   }) =>
       _db.from('tasks').insert({
         'title': title,
@@ -166,6 +175,7 @@ class Repository {
         'assigned_by_id': _uid,
         if (dueAt != null) 'due_at': _iso(dueAt),
         if (clientId != null) 'client_id': clientId,
+        if (custom.isNotEmpty) 'custom': custom,
       });
 
   // ---------------- الاجتماعات ----------------
@@ -193,6 +203,8 @@ class Repository {
     required int durationMinutes,
     required MeetingType type,
     String? clientId,
+    String? location,
+    Map<String, dynamic> custom = const {},
   }) async {
     final row = await _db
         .from('meetings')
@@ -202,6 +214,8 @@ class Repository {
           'end_at': _iso(startAt.add(Duration(minutes: durationMinutes))),
           'type': type.db,
           if (clientId != null) 'client_id': clientId,
+          if (location != null && location.isNotEmpty) 'location': location,
+          if (custom.isNotEmpty) 'custom': custom,
         })
         .select('id')
         .single();
@@ -289,8 +303,27 @@ class Repository {
     );
   }
 
-  Future<String> createClient(String name) async {
-    final row = await _db.from('clients').insert({'name': name}).select('id').single();
+  Future<String> createClient(
+    String name, {
+    String? sector,
+    String? city,
+    String? crNumber,
+    String? vatNumber,
+    Map<String, dynamic> custom = const {},
+  }) async {
+    final row = await _db
+        .from('clients')
+        .insert({
+          'name': name,
+          'status': 'active',
+          if (sector != null) 'sector': sector,
+          if (city != null && city.isNotEmpty) 'city': city,
+          if (crNumber != null && crNumber.isNotEmpty) 'cr_number': crNumber,
+          if (vatNumber != null && vatNumber.isNotEmpty) 'vat_number': vatNumber,
+          if (custom.isNotEmpty) 'custom': custom,
+        })
+        .select('id')
+        .single();
     return row['id'] as String;
   }
 }

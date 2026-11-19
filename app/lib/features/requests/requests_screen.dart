@@ -5,7 +5,10 @@ import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
+import '../../data/section_models.dart';
+import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
+import '../../widgets/forms.dart' show statusPill;
 
 /// ٢ · الطلبات
 class RequestsScreen extends ConsumerStatefulWidget {
@@ -33,6 +36,10 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
     final counts = ref.watch(requestCountsProvider).valueOrNull ?? const {};
     final total = counts.values.fold<int>(0, (a, b) => a + b);
     final overdue = requests.valueOrNull?.where((r) => r.isOverdue).length ?? 0;
+    final labels = {
+      for (final l in ref.watch(statusLabelsProvider(ConfigEntity.request)).valueOrNull ?? const <StatusLabel>[])
+        l.status: l,
+    };
 
     return Scaffold(
       appBar: AppBar(
@@ -62,7 +69,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                 itemBuilder: (_, i) {
                   final f = _filters[i];
                   final n = f == null ? total : counts[f];
-                  final label = f == null ? 'الكل' : f.label;
+                  final label = f == null ? 'الكل' : (labels[f.db]?.label ?? f.label);
                   return ChoiceChip(
                     label: Text(n == null ? label : '$label $n'),
                     selected: _filter == f,
@@ -86,7 +93,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                   : Column(
                       children: [
                         for (final r in list) ...[
-                          _RequestCard(r),
+                          _RequestCard(r, label: labels[r.status.db]),
                           const SizedBox(height: 12),
                         ],
                       ],
@@ -100,8 +107,9 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
 }
 
 class _RequestCard extends StatelessWidget {
-  const _RequestCard(this.r);
+  const _RequestCard(this.r, {this.label});
   final RequestItem r;
+  final StatusLabel? label;
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +126,7 @@ class _RequestCard extends StatelessWidget {
                   style: const TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
               ),
-              Pill.forRequest(r),
+              (r.isOverdue || label == null) ? Pill.forRequest(r) : statusPill(label!.label, label!.color),
             ],
           ),
           const SizedBox(height: 8),
@@ -133,7 +141,7 @@ class _RequestCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   [
-                    if (r.progress > 0) '${r.status.label} · ${r.progress}٪',
+                    if (r.progress > 0) '${label?.label ?? r.status.label} · ${r.progress}٪',
                     if (r.progress == 0 && r.dueDate != null) 'التسليم ${formatShortDate(r.dueDate!)}',
                     if (r.priority == Priority.high || r.priority == Priority.urgent) 'أولوية ${r.priority.label}',
                   ].join(' · '),
