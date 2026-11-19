@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatters.dart';
+import '../../core/permissions.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
+import '../../data/repository.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/forms.dart';
@@ -122,6 +124,7 @@ class _BulkManageScreenState extends ConsumerState<BulkManageScreen> {
     final rows = ref.watch(manageRowsProvider(_section.table));
     final all = rows.valueOrNull ?? const <Map<String, dynamic>>[];
     final n = _selected.length;
+    final canDelete = ref.watch(profileProvider).valueOrNull?.can(Permissions.dataDelete) ?? false;
 
     return Scaffold(
       appBar: sectionAppBar(
@@ -163,6 +166,7 @@ class _BulkManageScreenState extends ConsumerState<BulkManageScreen> {
                         child: const Text('تغيير الحالة'),
                       ),
                     const SizedBox(width: 6),
+                    if (canDelete)
                     FilledButton(
                       style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC2410C), minimumSize: const Size(0, 40)),
                       onPressed: _delete,

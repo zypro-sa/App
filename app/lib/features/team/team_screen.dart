@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/permissions.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
@@ -262,7 +263,7 @@ class _RoleOption extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _desc = {
-    UserRole.employee: 'يرى المسند إليه فقط · لا يرى المالية',
+    UserRole.employee: 'يرى المسند إليه فقط · يمكن تخصيص صلاحياته لاحقًا',
     UserRole.manager: 'يرى كل الطلبات والمهام · يُسند ويضيف عملاء',
   };
 
@@ -305,28 +306,31 @@ class _RoleOption extends StatelessWidget {
   }
 }
 
-/// ١٦ · صلاحيات العضو
+/// ١٦ · صلاحيات العضو: الدور + تشغيل وإيقاف كل صلاحية على حدة
 class MemberScreen extends ConsumerWidget {
   const MemberScreen({super.key, required this.memberId});
   final String memberId;
-
-  static List<(String, bool, String)> permissionsFor(UserRole r) {
-    final mgr = r != UserRole.employee;
-    return [
-      ('رؤية الطلبات والمهام', true, mgr ? 'الكل' : 'المسندة إليه'),
-      ('إسناد المهام للفريق', mgr, ''),
-      ('إضافة وتعديل العملاء', mgr, mgr ? '' : 'عرض فقط'),
-      ('المشاريع', true, mgr ? 'الكل' : 'التي يديرها'),
-      ('التقارير', mgr, ''),
-      ('المالية', r == UserRole.owner, r == UserRole.owner ? '' : 'المالك فقط'),
-      ('لوحة التحكم', r == UserRole.owner, r == UserRole.manager ? 'القوائم فقط' : ''),
-    ];
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final team = ref.watch(teamMembersProvider);
     final repo = ref.read(sectionRepoProvider);
+
+    Future<void> savePermissions(TeamMember m, String key, bool value) async {
+      final overrides = <String, bool>{
+        for (final e in m.permissions.entries)
+          if (e.value is bool) e.key: e.value as bool,
+      };
+      if (value == Permissions.roleDefault(m.role, key)) {
+        overrides.remove(key);
+      } else {
+        overrides[key] = value;
+      }
+      if (await runAction(context, () => repo.setMemberPermissions(m.id, overrides))) {
+        ref.invalidate(teamMembersProvider);
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('صلاحيات العضو'), centerTitle: true),
       body: AsyncBody<List<TeamMember>>(
@@ -335,6 +339,11 @@ class MemberScreen extends ConsumerWidget {
         builder: (all) {
           final m = all.where((x) => x.id == memberId).firstOrNull;
           if (m == null) return const EmptyState('العضو غير موجود');
+          final customized = Permissions.all.where((p) => m.isCustomized(p.key)).length;
+          final groups = <String, List<Permission>>{};
+          for (final p in Permissions.all) {
+            groups.putIfAbsent(p.group, () => []).add(p);
+          }
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
             children: [
@@ -367,6 +376,9 @@ class MemberScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 14),
               const Text('الدور', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.subtle)),
+              const SizedBox(height: 4),
+              const Text('يحدد الصلاحيات الافتراضية، ويمكنك تخصيصها بالأسفل',
+                  style: TextStyle(fontSize: 12, color: AppColors.muted)),
               const SizedBox(height: 8),
               SegmentedButton<UserRole>(
                 showSelectedIcon: false,
@@ -378,34 +390,64 @@ class MemberScreen extends ConsumerWidget {
                 onSelectionChanged: m.role == UserRole.owner
                     ? null
                     : (s) async {
-                        if (await runAction(context, () => repo.setMemberRole(m.id, s.first), success: 'تم تغيير الدور إلى ${s.first.label}')) {
+                        if (await runAction(context, () => repo.setMemberRole(m.id, s.first),
+                            success: 'تم تغيير الدور إلى ${s.first.label}')) {
                           ref.invalidate(teamMembersProvider);
                         }
                       },
               ),
-              const SizedBox(height: 14),
-              CardBox(
-                radius: 16,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                child: Column(
-                  children: [
-                    for (final p in permissionsFor(m.role))
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        child: Row(
-                          children: [
-                            Icon(p.$2 ? Icons.check_circle : Icons.cancel,
-                                size: 20, color: p.$2 ? AppColors.done : const Color(0xFFC5CAD3)),
-                            const SizedBox(width: 10),
-                            Expanded(child: Text(p.$1, style: const TextStyle(fontSize: 13))),
-                            Text(p.$3, style: const TextStyle(fontSize: 11, color: AppColors.muted)),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text('الصلاحيات', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.subtle)),
+                  ),
+                  if (customized > 0)
+                    TextButton(
+                      onPressed: () async {
+                        if (await runAction(context, () => repo.setMemberPermissions(m.id, {}),
+                            success: 'أُعيدت الصلاحيات الافتراضية لدور ${m.role.label}')) {
+                          ref.invalidate(teamMembersProvider);
+                        }
+                      },
+                      child: Text('إعادة الافتراضي ($customized)'),
+                    ),
+                ],
               ),
-              const SizedBox(height: 14),
+              for (final g in groups.entries) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, bottom: 6),
+                  child: Text(g.key, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.muted)),
+                ),
+                CardBox(
+                  radius: 16,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < g.value.length; i++) ...[
+                        if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                        SwitchListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                          value: m.can(g.value[i].key),
+                          onChanged: m.role == UserRole.owner ? null : (v) => savePermissions(m, g.value[i].key, v),
+                          title: Row(
+                            children: [
+                              Flexible(child: Text(g.value[i].label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+                              if (m.isCustomized(g.value[i].key)) ...[
+                                const SizedBox(width: 6),
+                                Pill.info('مخصص'),
+                              ],
+                            ],
+                          ),
+                          subtitle: Text(g.value[i].description, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+              ],
+              const SizedBox(height: 10),
               OutlinedButton(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: m.isActive ? AppColors.urgent : AppColors.done,
@@ -418,7 +460,7 @@ class MemberScreen extends ConsumerWidget {
                     title: m.isActive ? 'إيقاف حساب ${m.name}؟' : 'إعادة تفعيل ${m.name}؟',
                     message: m.isActive
                         ? 'لن يستطيع الدخول أو رؤية أي بيانات. مهامه وطلباته تبقى كما هي ويمكن إسنادها لغيره.'
-                        : 'سيستطيع الدخول مجددًا بنفس الدور.',
+                        : 'سيستطيع الدخول مجددًا بنفس الدور والصلاحيات.',
                     confirmLabel: m.isActive ? 'إيقاف' : 'تفعيل',
                     destructive: m.isActive,
                   );

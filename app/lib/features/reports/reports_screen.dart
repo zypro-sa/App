@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatters.dart';
+import '../../core/permissions.dart';
 import '../../core/theme.dart';
-import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../data/section_models.dart';
 import '../../data/section_repository.dart';
@@ -41,9 +41,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final role = ref.watch(profileProvider).valueOrNull?.role;
-    if (role == UserRole.employee) {
-      return Scaffold(appBar: sectionAppBar('التقارير'), body: const EmptyState('التقارير للمالك والمدير', icon: Icons.lock_outline));
+    final me = ref.watch(profileProvider).valueOrNull;
+    if (me != null && !me.can(Permissions.reportsView)) {
+      return Scaffold(appBar: sectionAppBar('التقارير'), body: const EmptyState('ليست لديك صلاحية التقارير', icon: Icons.lock_outline));
     }
     final report = ref.watch(reportProvider(_range));
     return Scaffold(

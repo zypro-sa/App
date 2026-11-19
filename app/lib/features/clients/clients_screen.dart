@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/permissions.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
@@ -33,7 +34,8 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
       appBar: AppBar(
         title: const Text('العملاء'),
         actions: [
-          IconButton(tooltip: 'عميل جديد', onPressed: _addClient, icon: const Icon(Icons.person_add_alt)),
+          if (ref.watch(profileProvider).valueOrNull?.can(Permissions.clientsManage) ?? false)
+            IconButton(tooltip: 'عميل جديد', onPressed: _addClient, icon: const Icon(Icons.person_add_alt)),
           const SizedBox(width: 8),
         ],
       ),

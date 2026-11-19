@@ -1,6 +1,8 @@
 // نماذج البيانات في التطبيق — تطابق docs/data-model.md
 import 'package:flutter/widgets.dart' show StringCharacters;
 
+import '../core/permissions.dart';
+
 enum RequestStatus {
   newRequest('new', 'جديد'),
   inProgress('in_progress', 'قيد التنفيذ'),
@@ -91,12 +93,16 @@ String? _nested(dynamic v, String key) =>
     v is Map ? v[key]?.toString() : null;
 
 class Profile {
-  Profile({required this.id, required this.name, required this.role, this.jobTitle});
+  Profile({required this.id, required this.name, required this.role, this.jobTitle, this.permissions = const {}});
 
   final String id;
   final String name;
   final UserRole role;
   final String? jobTitle;
+  final Map<String, dynamic> permissions;
+
+  /// هل يملك هذه الصلاحية؟ (انظر core/permissions.dart)
+  bool can(String key) => Permissions.effective(role, permissions, key);
 
   String get initial => name.isEmpty ? '؟' : name.characters.first;
 
@@ -105,6 +111,7 @@ class Profile {
         name: (m['name'] ?? '') as String,
         role: UserRole.from(m['role'] as String?),
         jobTitle: m['job_title'] as String?,
+        permissions: Map<String, dynamic>.from((m['permissions'] ?? const {}) as Map),
       );
 }
 
