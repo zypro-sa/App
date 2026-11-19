@@ -4,7 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/section_models.dart';
 import '../features/auth/login_screen.dart';
+import '../features/auth/set_password_screen.dart';
+import '../features/finance/finance_screen.dart';
+import '../features/notes/notes_screen.dart';
+import '../features/projects/project_detail_screen.dart';
+import '../features/projects/projects_screen.dart';
+import '../features/reports/reports_screen.dart';
+import '../features/settings/bulk_manage_screen.dart';
+import '../features/settings/section_settings_screen.dart';
+import '../features/settings/settings_screen.dart';
+import '../features/settings/trash_screen.dart';
+import '../features/team/team_screen.dart';
 import '../features/clients/client_screen.dart';
 import '../features/clients/clients_screen.dart';
 import '../features/followups/followups_screen.dart';
@@ -15,10 +27,22 @@ import '../features/quick_add/quick_add_sheet.dart';
 import '../features/requests/requests_screen.dart';
 import '../features/tasks/tasks_screen.dart';
 
+/// يصبح true عند فتح رابط استعادة كلمة المرور.
+final passwordRecovery = ValueNotifier<bool>(false);
+
+bool _needsPassword() {
+  final user = Supabase.instance.client.auth.currentUser;
+  return passwordRecovery.value || user?.userMetadata?['needs_password'] == true;
+}
+
 /// يعيد توجيه المستخدم عند تسجيل الدخول أو الخروج.
 class _AuthRefresh extends ChangeNotifier {
   _AuthRefresh() {
-    _sub = Supabase.instance.client.auth.onAuthStateChange.listen((_) => notifyListeners());
+    _sub = Supabase.instance.client.auth.onAuthStateChange.listen((s) {
+      if (s.event == AuthChangeEvent.passwordRecovery) passwordRecovery.value = true;
+      notifyListeners();
+    });
+    passwordRecovery.addListener(notifyListeners);
   }
   late final StreamSubscription<AuthState> _sub;
 
@@ -32,15 +56,20 @@ class _AuthRefresh extends ChangeNotifier {
 final appRouter = GoRouter(
   initialLocation: '/home',
   refreshListenable: _AuthRefresh(),
+  errorBuilder: (_, __) => const _Redirecting(),
   redirect: (context, state) {
     final loggedIn = Supabase.instance.client.auth.currentSession != null;
-    final atLogin = state.matchedLocation == '/login';
-    if (!loggedIn && !atLogin) return '/login';
-    if (loggedIn && atLogin) return '/home';
+    final loc = state.matchedLocation;
+    // روابط الدعوة والاستعادة تصل بمعاملات في العنوان
+    final authCallback = state.uri.toString().contains('access_token') || loc.isEmpty;
+    if (!loggedIn) return loc == '/login' ? null : '/login';
+    if (_needsPassword()) return loc == '/set-password' ? null : '/set-password';
+    if (loc == '/login' || loc == '/set-password' || authCallback) return '/home';
     return null;
   },
   routes: [
     GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+    GoRoute(path: '/set-password', builder: (_, __) => const SetPasswordScreen()),
     StatefulShellRoute.indexedStack(
       builder: (context, state, shell) => AppShell(shell: shell),
       branches: [
@@ -67,6 +96,38 @@ final appRouter = GoRouter(
                 builder: (_, s) => ClientScreen(clientId: s.pathParameters['id']!),
               ),
               GoRoute(path: 'followups', builder: (_, __) => const FollowupsScreen()),
+              GoRoute(
+                path: 'projects',
+                builder: (_, __) => const ProjectsScreen(),
+                routes: [
+                  GoRoute(path: ':id', builder: (_, s) => ProjectDetailScreen(projectId: s.pathParameters['id']!)),
+                ],
+              ),
+              GoRoute(path: 'finance', builder: (_, __) => const FinanceScreen()),
+              GoRoute(path: 'notes', builder: (_, __) => const NotesScreen()),
+              GoRoute(path: 'reports', builder: (_, __) => const ReportsScreen()),
+              GoRoute(
+                path: 'team',
+                builder: (_, __) => const TeamScreen(),
+                routes: [
+                  GoRoute(path: ':id', builder: (_, s) => MemberScreen(memberId: s.pathParameters['id']!)),
+                ],
+              ),
+              GoRoute(
+                path: 'settings',
+                builder: (_, __) => const SettingsScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'section/:entity',
+                    builder: (_, s) => SectionSettingsScreen(entity: ConfigEntity.from(s.pathParameters['entity'])),
+                  ),
+                  GoRoute(
+                    path: 'data',
+                    builder: (_, s) => BulkManageScreen(initialTable: s.uri.queryParameters['table'] ?? 'requests'),
+                  ),
+                  GoRoute(path: 'trash', builder: (_, __) => const TrashScreen()),
+                ],
+              ),
             ],
           ),
         ]),
@@ -74,6 +135,18 @@ final appRouter = GoRouter(
     ),
   ],
 );
+
+class _Redirecting extends StatelessWidget {
+  const _Redirecting();
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) GoRouter.of(context).go('/home');
+    });
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+  }
+}
 
 /// الإطار الثابت: شريط التنقل السفلي وزر الإضافة السريعة.
 class AppShell extends StatelessWidget {

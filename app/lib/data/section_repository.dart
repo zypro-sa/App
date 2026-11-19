@@ -1,0 +1,448 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'models.dart';
+import 'repository.dart';
+import 'section_models.dart';
+
+SupabaseClient get _db => Supabase.instance.client;
+String get _uid => _db.auth.currentUser!.id;
+
+String _isoDate(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+String _now() => DateTime.now().toUtc().toIso8601String();
+
+/// عمليات المرحلة الثانية.
+class SectionRepository {
+  // ---------------- المشاريع ----------------
+  Future<List<Project>> projects(ProjectStatus status) async {
+    final rows = await _db
+        .from('projects')
+        .select(Project.select)
+        .isFilter('deleted_at', null)
+        .eq('status', status.db)
+        .order('end_date', ascending: true, nullsFirst: false);
+    return rows.map(Project.fromMap).toList();
+  }
+
+  Future<Map<ProjectStatus, int>> projectCounts() async {
+    final rows = await _db.from('projects').select('status').isFilter('deleted_at', null);
+    final counts = <ProjectStatus, int>{};
+    for (final r in rows) {
+      final s = ProjectStatus.from(r['status'] as String?);
+      counts[s] = (counts[s] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  Future<Project> project(String id) async {
+    final row = await _db.from('projects').select(Project.select).eq('id', id).single();
+    return Project.fromMap(row);
+  }
+
+  Future<List<Milestone>> milestones(String projectId) async {
+    final rows = await _db
+        .from('milestones')
+        .select()
+        .eq('project_id', projectId)
+        .isFilter('deleted_at', null)
+        .order('due_date', ascending: true, nullsFirst: false);
+    return rows.map(Milestone.fromMap).toList();
+  }
+
+  Future<List<TaskItem>> projectTasks(String projectId) async {
+    final rows = await _db
+        .from('tasks')
+        .select(TaskItem.select)
+        .eq('project_id', projectId)
+        .isFilter('deleted_at', null)
+        .order('due_at', ascending: true, nullsFirst: false);
+    return rows.map(TaskItem.fromMap).toList();
+  }
+
+  Future<List<RequestItem>> projectRequests(String projectId) async {
+    final rows = await _db
+        .from('requests')
+        .select(RequestItem.select)
+        .eq('project_id', projectId)
+        .isFilter('deleted_at', null);
+    return rows.map(RequestItem.fromMap).toList();
+  }
+
+  Future<String> createProject({
+    required String name,
+    required String clientId,
+    String? managerId,
+    DateTime? endDate,
+    num? contractValue,
+    ProjectStatus status = ProjectStatus.active,
+    Map<String, dynamic> custom = const {},
+  }) async {
+    final row = await _db
+        .from('projects')
+        .insert({
+          'name': name,
+          'client_id': clientId,
+          'status': status.db,
+          'manager_id': managerId ?? _uid,
+          'start_date': _isoDate(DateTime.now()),
+          if (endDate != null) 'end_date': _isoDate(endDate),
+          if (contractValue != null) 'contract_value': contractValue,
+          if (custom.isNotEmpty) 'custom': custom,
+        })
+        .select('id')
+        .single();
+    return row['id'] as String;
+  }
+
+  Future<void> setProjectStatus(String id, ProjectStatus s) =>
+      _db.from('projects').update({'status': s.db}).eq('id', id);
+
+  Future<void> addMilestone(String projectId, String title, DateTime? due) => _db.from('milestones').insert({
+        'project_id': projectId,
+        'title': title,
+        if (due != null) 'due_date': _isoDate(due),
+      });
+
+  Future<void> setMilestoneDone(String id, bool done) =>
+      _db.from('milestones').update({'is_done': done}).eq('id', id);
+
+  // ---------------- المالية ----------------
+  Future<List<Invoice>> invoices() async {
+    final rows = await _db
+        .from('invoices')
+        .select(Invoice.select)
+        .isFilter('deleted_at', null)
+        .neq('status', 'void')
+        .order('due_date', ascending: true);
+    final list = rows.map(Invoice.fromMap).toList();
+    // المفتوحة أولًا (المتأخرة في المقدمة) ثم المدفوعة
+    list.sort((a, b) {
+      int rank(Invoice i) => i.isOverdue ? 0 : (i.isOpen ? 1 : 2);
+      final r = rank(a).compareTo(rank(b));
+      return r != 0 ? r : a.dueDate.compareTo(b.dueDate);
+    });
+    return list;
+  }
+
+  Future<FinanceSummary> financeSummary() async {
+    final invs = await invoices();
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month);
+    final pays = await _db
+        .from('payments')
+        .select('amount')
+        .isFilter('deleted_at', null)
+        .gte('paid_at', _isoDate(monthStart));
+    return FinanceSummary(
+      due: invs.where((i) => i.isOpen).fold<num>(0, (a, i) => a + i.remaining),
+      overdue: invs.where((i) => i.isOverdue).fold<num>(0, (a, i) => a + i.remaining),
+      collectedThisMonth: pays.fold<num>(0, (a, p) => a + num.parse(p['amount'].toString())),
+    );
+  }
+
+  Future<void> createInvoice({required String clientId, required num total, required DateTime dueDate}) =>
+      _db.from('invoices').insert({
+        'client_id': clientId,
+        'total': total,
+        'due_date': _isoDate(dueDate),
+      });
+
+  Future<void> recordPayment(String invoiceId, num amount) =>
+      _db.from('payments').insert({'invoice_id': invoiceId, 'amount': amount, 'method': 'bank_transfer'});
+
+  Future<List<Quote>> quotes() async {
+    final rows = await _db
+        .from('quotes')
+        .select(Quote.select)
+        .isFilter('deleted_at', null)
+        .order('created_at', ascending: false);
+    return rows.map(Quote.fromMap).toList();
+  }
+
+  Future<void> createQuote({required String clientId, required num amount, bool withVat = true}) =>
+      _db.from('quotes').insert({
+        'client_id': clientId,
+        'amount': amount,
+        'vat_amount': withVat ? (amount * 0.15) : 0,
+      });
+
+  Future<void> setQuoteStatus(String id, QuoteStatus s) => _db.from('quotes').update({
+        'status': s.db,
+        if (s == QuoteStatus.sent) 'sent_at': _isoDate(DateTime.now()),
+      }).eq('id', id);
+
+  // ---------------- الملاحظات ----------------
+  Future<List<NoteItem>> notes() async {
+    final rows = await _db
+        .from('notes')
+        .select()
+        .isFilter('deleted_at', null)
+        .order('is_pinned', ascending: false)
+        .order('created_at', ascending: false);
+    return rows.map(NoteItem.fromMap).toList();
+  }
+
+  Future<void> createNote(String content, NoteType type) =>
+      _db.from('notes').insert({'content': content, 'type': type.db});
+
+  Future<void> setNotePinned(String id, bool pinned) =>
+      _db.from('notes').update({'is_pinned': pinned}).eq('id', id);
+
+  Future<void> noteToTask(NoteItem n) async {
+    final title = n.content.length > 80 ? '${n.content.substring(0, 80)}…' : n.content;
+    final row = await _db
+        .from('tasks')
+        .insert({'title': title, 'assignee_id': _uid, 'assigned_by_id': _uid})
+        .select('id')
+        .single();
+    await _db.from('notes').update({'converted_task_id': row['id']}).eq('id', n.id);
+  }
+
+  // ---------------- الفريق ----------------
+  Future<List<TeamMember>> team() async {
+    final rows = await _db.rpc('team_members') as List;
+    return rows.map((m) => TeamMember.fromMap(Map<String, dynamic>.from(m as Map))).toList();
+  }
+
+  Future<void> inviteMember({
+    required String email,
+    required String name,
+    required UserRole role,
+    String? jobTitle,
+    bool resend = false,
+  }) async {
+    final res = await _db.functions.invoke('invite-member', body: {
+      'email': email,
+      'name': name,
+      'role': role.db,
+      if (jobTitle != null && jobTitle.isNotEmpty) 'job_title': jobTitle,
+      if (kIsWeb) 'redirect_to': '${Uri.base.origin}${Uri.base.path}',
+      'resend': resend,
+    });
+    final data = res.data;
+    if (data is Map && data['error'] != null) throw Exception(data['error']);
+  }
+
+  Future<void> setMemberRole(String id, UserRole role) =>
+      _db.from('profiles').update({'role': role.db}).eq('id', id);
+
+  Future<void> setMemberActive(String id, bool active) =>
+      _db.from('profiles').update({'is_active': active}).eq('id', id);
+
+  Future<void> updateMyProfile({required String name, String? jobTitle}) =>
+      _db.from('profiles').update({'name': name, 'job_title': jobTitle}).eq('id', _uid);
+
+  // ---------------- لوحة التحكم ----------------
+  Future<List<FieldSetting>> fieldSettings(ConfigEntity e) async {
+    final rows = await _db
+        .from('field_settings')
+        .select()
+        .eq('entity', e.db)
+        .isFilter('deleted_at', null)
+        .order('sort_order', ascending: true);
+    return rows.map(FieldSetting.fromMap).toList();
+  }
+
+  Future<Map<ConfigEntity, int>> fieldCounts() async {
+    final rows = await _db.from('field_settings').select('entity, is_system').isFilter('deleted_at', null);
+    final counts = <ConfigEntity, int>{};
+    for (final r in rows) {
+      final e = ConfigEntity.from(r['entity'] as String?);
+      if (r['is_system'] != true) counts[e] = (counts[e] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  Future<void> updateField(String id, Map<String, dynamic> changes) =>
+      _db.from('field_settings').update(changes).eq('id', id);
+
+  Future<void> createField({
+    required ConfigEntity entity,
+    required String label,
+    required FieldType type,
+    required List<String> options,
+    required bool required,
+    required bool showOnCard,
+    required int sortOrder,
+  }) =>
+      _db.from('field_settings').insert({
+        'entity': entity.db,
+        'key': 'cf_${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}',
+        'label': label,
+        'type': type.db,
+        'options': options,
+        'required': required,
+        'show_on_card': showOnCard,
+        'sort_order': sortOrder,
+      });
+
+  Future<void> deleteField(String id) =>
+      _db.from('field_settings').update({'deleted_at': _now()}).eq('id', id);
+
+  Future<void> reorderFields(List<FieldSetting> ordered) async {
+    for (var i = 0; i < ordered.length; i++) {
+      if (ordered[i].sortOrder != i + 1) {
+        await _db.from('field_settings').update({'sort_order': i + 1}).eq('id', ordered[i].id);
+      }
+    }
+  }
+
+  Future<List<StatusLabel>> statusLabels(ConfigEntity e) async {
+    final rows = await _db
+        .from('status_labels')
+        .select()
+        .eq('entity', e.db)
+        .order('sort_order', ascending: true);
+    return rows.map(StatusLabel.fromMap).toList();
+  }
+
+  Future<void> updateStatusLabel(ConfigEntity e, String status, String label, String color) => _db
+      .from('status_labels')
+      .update({'label': label, 'color': color})
+      .eq('entity', e.db)
+      .eq('status', status);
+
+  // ---------------- إدارة البيانات والسلة ----------------
+  Future<List<Map<String, dynamic>>> manageRows(String table) async {
+    final select = switch (table) {
+      'requests' => 'id, number, title, status, client:clients(name)',
+      'tasks' => 'id, title, status, due_at',
+      'clients' => 'id, name, city, status',
+      'meetings' => 'id, title, start_at, status',
+      'notes' => 'id, content, type, created_at',
+      _ => 'id',
+    };
+    final order = switch (table) {
+      'requests' => 'number',
+      'meetings' => 'start_at',
+      'clients' => 'name',
+      _ => 'created_at',
+    };
+    final rows = await _db
+        .from(table)
+        .select(select)
+        .isFilter('deleted_at', null)
+        .order(order, ascending: table == 'clients')
+        .limit(300);
+    return rows;
+  }
+
+  Future<void> softDelete(String table, List<String> ids) =>
+      _db.from(table).update({'deleted_at': _now()}).inFilter('id', ids);
+
+  Future<void> setStatus(String table, List<String> ids, String status) =>
+      _db.from(table).update({'status': status}).inFilter('id', ids);
+
+  Future<void> rename(String table, String id, String field, String value) =>
+      _db.from(table).update({field: value}).eq('id', id);
+
+  Future<int> deleteCancelledRequests() async {
+    final rows = await _db
+        .from('requests')
+        .update({'deleted_at': _now()})
+        .eq('status', 'cancelled')
+        .isFilter('deleted_at', null)
+        .select('id');
+    return rows.length;
+  }
+
+  Future<List<TrashItem>> trash() async {
+    final results = await Future.wait<dynamic>([
+      _db.from('trash_items').select().order('deleted_at', ascending: false),
+      _db.from('profiles').select('id, name'),
+    ]);
+    final names = {
+      for (final p in results[1] as List) p['id'] as String: (p['name'] ?? '') as String,
+    };
+    return (results[0] as List)
+        .map((m) => TrashItem.fromMap(Map<String, dynamic>.from(m as Map), names))
+        .toList();
+  }
+
+  Future<void> restore(TrashItem t) => _db.from(t.table).update({'deleted_at': null}).eq('id', t.id);
+
+  Future<void> deleteForever(TrashItem t) => _db.from(t.table).delete().eq('id', t.id);
+
+  // ---------------- التقارير ----------------
+  Future<ReportSummary> report(DateTime from, DateTime to) async {
+    final res = await _db.rpc('report_summary', params: {'p_from': _isoDate(from), 'p_to': _isoDate(to)});
+    return ReportSummary.fromMap(Map<String, dynamic>.from(res as Map));
+  }
+}
+
+// ---------------- مزوّدات Riverpod ----------------
+final sectionRepoProvider = Provider((_) => SectionRepository());
+
+final projectsProvider = FutureProvider.family<List<Project>, ProjectStatus>(
+  (ref, s) => ref.watch(sectionRepoProvider).projects(s),
+);
+final projectCountsProvider = FutureProvider<Map<ProjectStatus, int>>(
+  (ref) => ref.watch(sectionRepoProvider).projectCounts(),
+);
+final projectProvider = FutureProvider.family<Project, String>(
+  (ref, id) => ref.watch(sectionRepoProvider).project(id),
+);
+final milestonesProvider = FutureProvider.family<List<Milestone>, String>(
+  (ref, id) => ref.watch(sectionRepoProvider).milestones(id),
+);
+final projectTasksProvider = FutureProvider.family<List<TaskItem>, String>(
+  (ref, id) => ref.watch(sectionRepoProvider).projectTasks(id),
+);
+final projectRequestsProvider = FutureProvider.family<List<RequestItem>, String>(
+  (ref, id) => ref.watch(sectionRepoProvider).projectRequests(id),
+);
+
+final invoicesProvider = FutureProvider<List<Invoice>>((ref) => ref.watch(sectionRepoProvider).invoices());
+final financeSummaryProvider =
+    FutureProvider<FinanceSummary>((ref) => ref.watch(sectionRepoProvider).financeSummary());
+final quotesProvider = FutureProvider<List<Quote>>((ref) => ref.watch(sectionRepoProvider).quotes());
+
+final notesProvider = FutureProvider<List<NoteItem>>((ref) => ref.watch(sectionRepoProvider).notes());
+
+final teamMembersProvider = FutureProvider<List<TeamMember>>((ref) => ref.watch(sectionRepoProvider).team());
+
+final fieldSettingsProvider = FutureProvider.family<List<FieldSetting>, ConfigEntity>(
+  (ref, e) => ref.watch(sectionRepoProvider).fieldSettings(e),
+);
+final fieldConfigProvider = FutureProvider.family<FieldConfig, ConfigEntity>(
+  (ref, e) async => FieldConfig(await ref.watch(fieldSettingsProvider(e).future)),
+);
+final fieldCountsProvider =
+    FutureProvider<Map<ConfigEntity, int>>((ref) => ref.watch(sectionRepoProvider).fieldCounts());
+final statusLabelsProvider = FutureProvider.family<List<StatusLabel>, ConfigEntity>(
+  (ref, e) => ref.watch(sectionRepoProvider).statusLabels(e),
+);
+
+final manageRowsProvider = FutureProvider.family<List<Map<String, dynamic>>, String>(
+  (ref, table) => ref.watch(sectionRepoProvider).manageRows(table),
+);
+final trashProvider = FutureProvider<List<TrashItem>>((ref) => ref.watch(sectionRepoProvider).trash());
+
+final reportProvider = FutureProvider.family<ReportSummary, (DateTime, DateTime)>(
+  (ref, p) => ref.watch(sectionRepoProvider).report(p.$1, p.$2),
+);
+
+/// تحديث كل بيانات المرحلة الثانية مع بيانات المرحلة الأولى.
+void refreshSections(WidgetRef ref) {
+  refreshAll(ref);
+  ref.invalidate(projectsProvider);
+  ref.invalidate(projectCountsProvider);
+  ref.invalidate(projectProvider);
+  ref.invalidate(milestonesProvider);
+  ref.invalidate(projectTasksProvider);
+  ref.invalidate(projectRequestsProvider);
+  ref.invalidate(invoicesProvider);
+  ref.invalidate(financeSummaryProvider);
+  ref.invalidate(quotesProvider);
+  ref.invalidate(notesProvider);
+  ref.invalidate(teamMembersProvider);
+  ref.invalidate(fieldSettingsProvider);
+  ref.invalidate(fieldConfigProvider);
+  ref.invalidate(fieldCountsProvider);
+  ref.invalidate(statusLabelsProvider);
+  ref.invalidate(manageRowsProvider);
+  ref.invalidate(trashProvider);
+  ref.invalidate(reportProvider);
+}

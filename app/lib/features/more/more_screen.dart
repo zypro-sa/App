@@ -16,16 +16,17 @@ class MoreScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(profileProvider).valueOrNull;
     final isOwner = profile?.role == UserRole.owner;
+    final isEmployee = profile?.role == UserRole.employee;
 
     void soon() => showSnack(context, 'هذا القسم في المرحلة القادمة');
 
     final sections = <_Section>[
       _Section('العملاء', Icons.people_outline, AppColors.primary, AppColors.primarySoft, () => context.go('/more/clients')),
-      _Section('المشاريع', Icons.folder_outlined, AppColors.done, AppColors.doneSoft, soon),
+      _Section('المشاريع', Icons.folder_outlined, AppColors.done, AppColors.doneSoft, () => context.go('/more/projects')),
       _Section('المتابعات', Icons.schedule, AppColors.waiting, AppColors.waitingSoft, () => context.go('/more/followups')),
-      if (isOwner) _Section('المالية', Icons.receipt_long_outlined, AppColors.urgent, AppColors.urgentSoft, soon),
-      _Section('الملاحظات', Icons.sticky_note_2_outlined, AppColors.subtle, AppColors.neutralSoft, soon),
-      _Section('التقارير', Icons.bar_chart, AppColors.primary, AppColors.primarySoft, soon),
+      if (isOwner) _Section('المالية', Icons.receipt_long_outlined, AppColors.urgent, AppColors.urgentSoft, () => context.go('/more/finance')),
+      _Section('الملاحظات', Icons.sticky_note_2_outlined, AppColors.subtle, AppColors.neutralSoft, () => context.go('/more/notes')),
+      if (!isEmployee) _Section('التقارير', Icons.bar_chart, AppColors.primary, AppColors.primarySoft, () => context.go('/more/reports')),
     ];
 
     return Scaffold(
@@ -67,10 +68,16 @@ class MoreScreen extends ConsumerWidget {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
-                  if (isOwner) ...[
-                    ListTile(title: const Text('الفريق والصلاحيات'), trailing: const Icon(Icons.chevron_left), onTap: soon),
+                  if (!isEmployee) ...[
+                    ListTile(
+                      title: const Text('لوحة التحكم والإعدادات', style: TextStyle(fontWeight: FontWeight.w600)),
+                      trailing: const Icon(Icons.chevron_left),
+                      onTap: () => context.go('/more/settings'),
+                    ),
                     const Divider(height: 1, color: AppColors.divider),
                   ],
+                  ListTile(title: const Text('الفريق والصلاحيات'), trailing: const Icon(Icons.chevron_left), onTap: () => context.go('/more/team')),
+                  const Divider(height: 1, color: AppColors.divider),
                   ListTile(title: const Text('الإشعارات والتذكيرات'), trailing: const Icon(Icons.chevron_left), onTap: soon),
                   const Divider(height: 1, color: AppColors.divider),
                   ListTile(title: const Text('ربط التقويم والبريد'), trailing: const Icon(Icons.chevron_left), onTap: soon),
