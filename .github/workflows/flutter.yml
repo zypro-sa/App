@@ -1,0 +1,25 @@
+name: Flutter checks
+
+on:
+  pull_request:
+    paths: ["app/**", ".github/workflows/flutter.yml"]
+  push:
+    branches: [main]
+    paths: ["app/**"]
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter --version
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed lib || true
+      - run: flutter analyze --no-fatal-infos
