@@ -637,3 +637,48 @@ class RequestDetail {
     );
   }
 }
+
+// ---------------- الإشعارات ----------------
+class NotificationItem {
+  NotificationItem({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.createdAt,
+    this.body,
+    this.url,
+    this.readAt,
+  });
+
+  final String id;
+  final String type;
+  final String title;
+  final String? body;
+  final String? url;
+  final DateTime createdAt;
+  final DateTime? readAt;
+
+  bool get isRead => readAt != null;
+
+  factory NotificationItem.fromMap(Map<String, dynamic> m) => NotificationItem(
+        id: m['id'] as String,
+        type: (m['type'] ?? '') as String,
+        title: (m['title'] ?? '') as String,
+        body: m['body'] as String?,
+        url: m['url'] as String?,
+        createdAt: _ts(m['created_at'])!,
+        readAt: _ts(m['read_at']),
+      );
+}
+
+/// أنواع التذكيرات التي يختارها العضو.
+class NotificationKinds {
+  static const all = <(String, String, String)>[
+    ('meeting_soon', 'اجتماع قريب', 'قبل الاجتماع بحوالي ٣٠ دقيقة'),
+    ('task_due', 'ملخص المهام صباحًا', 'كل يوم ٨ ص: مهام اليوم والمتأخرة'),
+    ('request_overdue', 'الطلبات المتأخرة', 'كل يوم ٩ ص للطلبات التي تجاوزت موعدها'),
+    ('followup_due', 'المتابعات المستحقة', 'عند حلول موعد أي متابعة'),
+    ('assigned', 'إسناد جديد', 'فور إسناد مهمة أو طلب إليك'),
+    ('quote_no_reply', 'عروض أسعار بلا رد', 'بعد ٣ أيام من الإرسال (لصلاحية المالية)'),
+  ];
+}
