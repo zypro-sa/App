@@ -55,6 +55,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   MeetingType _meetingType = MeetingType.inPerson;
   FollowupDirection _direction = FollowupDirection.promised;
   String? _serviceType;
+  String? _paymentTerms;
   num? _value;
   final _location = TextEditingController();
   final Map<String, dynamic> _custom = {};
@@ -89,6 +90,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       case QuickAddType.request:
         if (req('due_date') && _when == null) return 'حدّد ${cfg.labelOf('due_date', 'الموعد النهائي')}';
         if (req('service_type') && _serviceType == null) return 'اختر ${cfg.labelOf('service_type', 'نوع الخدمة')}';
+        if (req('payment_terms') && _paymentTerms == null) return 'اختر ${cfg.labelOf('payment_terms', 'شروط الدفع')}';
         if (req('estimated_value') && _value == null) return 'أدخل ${cfg.labelOf('estimated_value', 'القيمة التقديرية')}';
       case QuickAddType.task:
         if (req('due_at') && _when == null) return 'حدّد ${cfg.labelOf('due_at', 'الموعد')}';
@@ -175,6 +177,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             priority: _priority,
             dueDate: _when,
             serviceType: _serviceType,
+            paymentTerms: _paymentTerms,
             estimatedValue: _value,
             custom: Map.of(_custom),
           );
@@ -307,6 +310,15 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                         value: _serviceType,
                         items: {for (final o in cfg.optionsOf('service_type')) o: o},
                         onChanged: (v) => setState(() => _serviceType = v),
+                      ),
+                    ],
+                    if (_type == QuickAddType.request && cfg.isVisible('payment_terms') && cfg.optionsOf('payment_terms').isNotEmpty) ...[
+                      divider,
+                      _DropdownRow<String>(
+                        label: star('payment_terms', cfg.labelOf('payment_terms', 'شروط الدفع')),
+                        value: _paymentTerms,
+                        items: {for (final o in cfg.optionsOf('payment_terms')) o: o},
+                        onChanged: (v) => setState(() => _paymentTerms = v),
                       ),
                     ],
                     if (_type == QuickAddType.request && cfg.isVisible('estimated_value')) ...[

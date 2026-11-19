@@ -520,3 +520,76 @@ class ReportSummary {
             .toList(),
       );
 }
+
+// ---------------- تفاصيل الطلب وخطواته ----------------
+class RequestStep {
+  RequestStep({required this.id, required this.title, required this.isDone, required this.sortOrder, this.doneAt});
+
+  final String id;
+  final String title;
+  final bool isDone;
+  final int sortOrder;
+  final DateTime? doneAt;
+
+  factory RequestStep.fromMap(Map<String, dynamic> m) => RequestStep(
+        id: m['id'] as String,
+        title: m['title'] as String,
+        isDone: (m['is_done'] ?? false) as bool,
+        sortOrder: (m['sort_order'] ?? 0) as int,
+        doneAt: _ts(m['done_at']),
+      );
+}
+
+class RequestDetail {
+  RequestDetail({
+    required this.item,
+    required this.steps,
+    this.description,
+    this.serviceType,
+    this.paymentTerms,
+    this.estimatedValue,
+    this.clientId,
+    this.assigneeId,
+    this.receivedAt,
+    this.custom = const {},
+  });
+
+  final RequestItem item;
+  final List<RequestStep> steps;
+  final String? description;
+  final String? serviceType;
+  final String? paymentTerms;
+  final num? estimatedValue;
+  final String? clientId;
+  final String? assigneeId;
+  final DateTime? receivedAt;
+  final Map<String, dynamic> custom;
+
+  int get doneSteps => steps.where((s) => s.isDone).length;
+
+  static const select =
+      'id, number, title, description, status, priority, progress, due_date, received_at, service_type, '
+      'payment_terms, estimated_value, client_id, assignee_id, custom, client:clients(name), '
+      'assignee:profiles!requests_assignee_id_fkey(name), '
+      'request_steps(id, title, is_done, done_at, sort_order, deleted_at)';
+
+  factory RequestDetail.fromMap(Map<String, dynamic> m) {
+    final steps = ((m['request_steps'] ?? []) as List)
+        .where((s) => s['deleted_at'] == null)
+        .map((s) => RequestStep.fromMap(Map<String, dynamic>.from(s as Map)))
+        .toList()
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    return RequestDetail(
+      item: RequestItem.fromMap(m),
+      steps: steps,
+      description: m['description'] as String?,
+      serviceType: m['service_type'] as String?,
+      paymentTerms: m['payment_terms'] as String?,
+      estimatedValue: m['estimated_value'] == null ? null : _num(m['estimated_value']),
+      clientId: m['client_id'] as String?,
+      assigneeId: m['assignee_id'] as String?,
+      receivedAt: _ts(m['received_at']),
+      custom: Map<String, dynamic>.from((m['custom'] ?? const {}) as Map),
+    );
+  }
+}

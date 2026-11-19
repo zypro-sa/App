@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
@@ -115,6 +116,7 @@ class _RequestCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return CardBox(
       borderColor: r.isOverdue ? AppColors.urgentBorder : AppColors.line,
+      onTap: () => context.go('/requests/${r.id}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

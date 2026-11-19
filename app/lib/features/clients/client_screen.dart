@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
+import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 
 /// ٥ · ملف العميل
@@ -91,6 +93,8 @@ class _ClientBody extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 18),
+        _ClientRequests(clientId: d.client.id),
         const SizedBox(height: 18),
         const SectionHeader('السجل'),
         if (d.activity.isEmpty)
@@ -197,6 +201,84 @@ class _TimelineEntry extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// طلبات العميل مجمّعة في ملفه.
+class _ClientRequests extends ConsumerWidget {
+  const _ClientRequests({required this.clientId});
+  final String clientId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final requests = ref.watch(clientRequestsProvider(clientId));
+    final list = requests.valueOrNull ?? const <RequestItem>[];
+    final open = list.where((r) => r.status.isOpen).toList();
+    final closed = list.where((r) => !r.status.isOpen).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionHeader('الطلبات${list.isEmpty ? '' : ' · ${open.length} مفتوح'}'),
+        AsyncBody<List<RequestItem>>(
+          value: requests,
+          onRetry: () => ref.invalidate(clientRequestsProvider(clientId)),
+          builder: (_) => list.isEmpty
+              ? const CardBox(child: Text('لا توجد طلبات لهذا العميل', style: TextStyle(color: AppColors.muted)))
+              : CardBox(
+                  radius: 16,
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < [...open, ...closed].length; i++) ...[
+                        if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                        _row(context, [...open, ...closed][i]),
+                      ],
+                    ],
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _row(BuildContext context, RequestItem r) {
+    return InkWell(
+      onTap: () => context.go('/requests/${r.id}'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('#${r.number} · ${r.title}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: r.status.isOpen ? AppColors.ink : AppColors.muted,
+                      )),
+                ),
+                const SizedBox(width: 8),
+                Pill.forRequest(r),
+              ],
+            ),
+            if (r.status.isOpen) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: ProgressLine(r.progress, color: r.isOverdue ? const Color(0xFFC2410C) : AppColors.primary)),
+                  const SizedBox(width: 8),
+                  Text('${r.progress}٪', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
