@@ -271,7 +271,7 @@ class _ClientRequests extends ConsumerWidget {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Expanded(child: ProgressLine(r.progress, color: r.isOverdue ? const Color(0xFFC2410C) : AppColors.primary)),
+                  Expanded(child: ProgressLine(r.progress, color: r.isOverdue ? const Color(0xFFC2410C) : AppColors.accent)),
                   const SizedBox(width: 8),
                   Text('${r.progress}٪', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                 ],

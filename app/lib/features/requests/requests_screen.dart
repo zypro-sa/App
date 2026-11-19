@@ -135,7 +135,7 @@ class _RequestCard extends StatelessWidget {
           Text(r.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           if (r.progress > 0) ...[
             const SizedBox(height: 10),
-            ProgressLine(r.progress, color: r.isOverdue ? const Color(0xFFC2410C) : AppColors.primary),
+            ProgressLine(r.progress, color: r.isOverdue ? const Color(0xFFC2410C) : AppColors.accent),
           ],
           const SizedBox(height: 10),
           Row(

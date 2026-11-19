@@ -24,7 +24,7 @@ class PersonalAssistantApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'المساعد الشخصي',
+      title: 'Zypro',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       routerConfig: appRouter,

@@ -51,6 +51,8 @@ class _Header extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Image.asset('assets/brand/zypro_wordmark.png', height: 26, semanticLabel: 'Zypro'),
+              const SizedBox(height: 6),
               Text(formatDay(DateTime.now()), style: const TextStyle(fontSize: 13, color: AppColors.muted)),
               Text(
                 '${greeting()}، ${profile?.name ?? ''}',
@@ -74,7 +76,7 @@ class _Header extends StatelessWidget {
         const SizedBox(width: 8),
         GestureDetector(
           onTap: () => context.go('/more'),
-          child: Avatar(profile?.initial ?? '؟', size: 44, fg: Colors.white, bg: AppColors.primary, radius: 14),
+          child: Avatar(profile?.initial ?? '؟', size: 44, fg: AppColors.accent, bg: AppColors.ink, radius: 14),
         ),
       ],
     );
@@ -193,12 +195,12 @@ class _NextMeeting extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
+                  color: AppColors.accent,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   'التالي · ${isToday ? timeUntil(m.startAt) : relativeDay(m.startAt)}',
-                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                  style: const TextStyle(color: AppColors.ink, fontSize: 12, fontWeight: FontWeight.w700),
                 ),
               ),
               const Spacer(),
@@ -212,7 +214,7 @@ class _NextMeeting extends StatelessWidget {
           Text(m.title, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700)),
           Text(
             [m.clientName, m.location ?? m.type.label].whereType<String>().join(' · '),
-            style: const TextStyle(color: Color(0xFFDCE4FB), fontSize: 13),
+            style: const TextStyle(color: Color(0xFFC9CBD3), fontSize: 13),
           ),
           const SizedBox(height: 12),
           Row(

@@ -61,7 +61,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
             const SizedBox(height: 14),
             Row(
               children: [
-                Expanded(child: ProgressLine(percent, color: AppColors.done, height: 8)),
+                Expanded(child: ProgressLine(percent, height: 8)),
                 const SizedBox(width: 10),
                 Text('$percent٪', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.done)),
               ],

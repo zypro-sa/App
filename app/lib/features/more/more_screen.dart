@@ -35,7 +35,7 @@ class MoreScreen extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Avatar(profile?.initial ?? '؟', size: 52, fg: Colors.white, bg: AppColors.primary, radius: 16),
+                Avatar(profile?.initial ?? '؟', size: 52, fg: AppColors.accent, bg: AppColors.ink, radius: 16),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

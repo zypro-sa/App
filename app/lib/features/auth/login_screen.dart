@@ -76,12 +76,12 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Avatar('م', size: 64, fg: Colors.white, bg: AppColors.primary, radius: 20),
+                  Center(child: Image.asset('assets/brand/zypro_wordmark.png', width: 170, semanticLabel: 'Zypro')),
                   const SizedBox(height: 16),
-                  const Text(
-                    'المساعد الشخصي',
+                  Text(
+                    _signUp ? 'إنشاء حساب' : 'أهلًا بعودتك',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
                   Text(
