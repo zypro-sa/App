@@ -77,7 +77,7 @@ class MoreScreen extends ConsumerWidget {
                   ],
                   ListTile(title: const Text('الفريق والصلاحيات'), trailing: const Icon(Icons.chevron_left), onTap: () => context.go('/more/team')),
                   const Divider(height: 1, color: AppColors.divider),
-                  ListTile(title: const Text('الإشعارات والتذكيرات'), trailing: const Icon(Icons.chevron_left), onTap: soon),
+                  ListTile(title: const Text('الإشعارات والتذكيرات'), trailing: const Icon(Icons.chevron_left), onTap: () => context.go('/more/notifications')),
                   const Divider(height: 1, color: AppColors.divider),
                   ListTile(title: const Text('ربط التقويم والبريد'), trailing: const Icon(Icons.chevron_left), onTap: soon),
                   const Divider(height: 1, color: AppColors.divider),

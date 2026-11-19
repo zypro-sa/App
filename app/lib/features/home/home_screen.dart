@@ -6,6 +6,7 @@ import '../../core/formatters.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
+import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 
 /// ١ · لوحة اليوم
@@ -20,7 +21,7 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () async => refreshAll(ref),
+          onRefresh: () async => refreshSections(ref),
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
             children: [
@@ -64,8 +65,19 @@ class _Header extends StatelessWidget {
         ),
         IconButton.outlined(
           tooltip: 'الإشعارات',
-          onPressed: () {},
-          icon: const Icon(Icons.notifications_none),
+          onPressed: () => context.go('/home/notifications'),
+          icon: Consumer(
+            builder: (_, ref, __) {
+              final unread = ref.watch(unreadNotificationsProvider);
+              return Badge(
+                isLabelVisible: unread > 0,
+                backgroundColor: AppColors.accent,
+                textColor: AppColors.ink,
+                label: Text(unread > 9 ? '+9' : '$unread'),
+                child: const Icon(Icons.notifications_none),
+              );
+            },
+          ),
           style: IconButton.styleFrom(
             backgroundColor: Colors.white,
             side: const BorderSide(color: AppColors.line),

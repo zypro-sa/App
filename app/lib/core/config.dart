@@ -16,4 +16,10 @@ class AppConfig {
     'SUPABASE_KEY',
     defaultValue: 'sb_publishable_HAIgTj1vIqH0_7yGc4iq6g_zr6Xia7V',
   );
+
+  /// المفتاح العام لإشعارات الجوال (VAPID). عام وآمن داخل التطبيق.
+  static const vapidPublicKey = String.fromEnvironment(
+    'VAPID_PUBLIC_KEY',
+    defaultValue: 'BFT3fSPaey9hO4IjZeuth7Wp6EQ_JftHdUP21LC9s84UWwt9bz52YcDW8dQTcVUKFIj_3oIZk4C5nnzB6aQxMWE',
+  );
 }

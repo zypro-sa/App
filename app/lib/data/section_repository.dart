@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -438,6 +440,62 @@ class SectionRepository {
 
   Future<void> deleteStep(String id) => _db.from('request_steps').delete().eq('id', id);
 
+  // ---------------- الإشعارات ----------------
+  Future<List<NotificationItem>> notifications() async {
+    final rows = await _db
+        .from('notifications')
+        .select()
+        .eq('user_id', _uid)
+        .order('created_at', ascending: false)
+        .limit(100);
+    return rows.map(NotificationItem.fromMap).toList();
+  }
+
+  Future<void> markNotificationRead(String id) =>
+      _db.from('notifications').update({'read_at': _now()}).eq('id', id).isFilter('read_at', null);
+
+  Future<void> markAllNotificationsRead() =>
+      _db.from('notifications').update({'read_at': _now()}).eq('user_id', _uid).isFilter('read_at', null);
+
+  Future<void> clearReadNotifications() =>
+      _db.from('notifications').delete().eq('user_id', _uid).not('read_at', 'is', null);
+
+  Future<void> sendTestNotification() => _db.from('notifications').insert({
+        'user_id': _uid,
+        'type': 'test',
+        'title': 'الإشعارات تعمل ✓',
+        'body': 'هكذا ستصلك التذكيرات من Zypro',
+        'url': '/home',
+      });
+
+  Future<Map<String, dynamic>> notifyPrefs() async {
+    final row = await _db.from('profiles').select('notify_prefs').eq('id', _uid).single();
+    return Map<String, dynamic>.from((row['notify_prefs'] ?? const {}) as Map);
+  }
+
+  Future<void> setNotifyPrefs(Map<String, dynamic> prefs) =>
+      _db.from('profiles').update({'notify_prefs': prefs}).eq('id', _uid);
+
+  Future<void> savePushSubscription(String subscriptionJson, String? userAgent) async {
+    final sub = Map<String, dynamic>.from(jsonDecode(subscriptionJson) as Map);
+    final keys = Map<String, dynamic>.from(sub['keys'] as Map);
+    await _db.from('push_subscriptions').upsert({
+      'user_id': _uid,
+      'endpoint': sub['endpoint'],
+      'p256dh': keys['p256dh'],
+      'auth': keys['auth'],
+      if (userAgent != null) 'user_agent': userAgent,
+    }, onConflict: 'endpoint');
+  }
+
+  Future<void> deletePushSubscription(String endpoint) =>
+      _db.from('push_subscriptions').delete().eq('endpoint', endpoint);
+
+  Future<int> myDeviceCount() async {
+    final rows = await _db.from('push_subscriptions').select('id').eq('user_id', _uid);
+    return rows.length;
+  }
+
   // ---------------- التقارير ----------------
   Future<ReportSummary> report(DateTime from, DateTime to) async {
     final res = await _db.rpc('report_summary', params: {'p_from': _isoDate(from), 'p_to': _isoDate(to)});
@@ -500,6 +558,15 @@ final reportProvider = FutureProvider.family<ReportSummary, (DateTime, DateTime)
 final requestDetailProvider = FutureProvider.family<RequestDetail, String>(
   (ref, id) => ref.watch(sectionRepoProvider).requestDetail(id),
 );
+final notificationsProvider =
+    FutureProvider<List<NotificationItem>>((ref) => ref.watch(sectionRepoProvider).notifications());
+final unreadNotificationsProvider = Provider<int>(
+  (ref) => ref.watch(notificationsProvider).valueOrNull?.where((n) => !n.isRead).length ?? 0,
+);
+final notifyPrefsProvider =
+    FutureProvider<Map<String, dynamic>>((ref) => ref.watch(sectionRepoProvider).notifyPrefs());
+final myDeviceCountProvider = FutureProvider<int>((ref) => ref.watch(sectionRepoProvider).myDeviceCount());
+
 final requestInvoicesProvider = FutureProvider.family<List<Invoice>, String>(
   (ref, id) => ref.watch(sectionRepoProvider).requestInvoices(id),
 );
@@ -531,4 +598,5 @@ void refreshSections(WidgetRef ref) {
   ref.invalidate(requestDetailProvider);
   ref.invalidate(clientRequestsProvider);
   ref.invalidate(requestInvoicesProvider);
+  ref.invalidate(notificationsProvider);
 }

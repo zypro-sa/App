@@ -9,6 +9,8 @@ import '../features/auth/login_screen.dart';
 import '../features/auth/set_password_screen.dart';
 import '../features/finance/finance_screen.dart';
 import '../features/notes/notes_screen.dart';
+import '../features/notifications/notification_settings_screen.dart';
+import '../features/notifications/notifications_screen.dart';
 import '../features/projects/project_detail_screen.dart';
 import '../features/projects/projects_screen.dart';
 import '../features/reports/reports_screen.dart';
@@ -75,7 +77,13 @@ final appRouter = GoRouter(
       builder: (context, state, shell) => AppShell(shell: shell),
       branches: [
         StatefulShellBranch(routes: [
-          GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
+          GoRoute(
+            path: '/home',
+            builder: (_, __) => const HomeScreen(),
+            routes: [
+              GoRoute(path: 'notifications', builder: (_, __) => const NotificationsScreen()),
+            ],
+          ),
         ]),
         StatefulShellBranch(routes: [
           GoRoute(
@@ -111,6 +119,7 @@ final appRouter = GoRouter(
                 ],
               ),
               GoRoute(path: 'finance', builder: (_, __) => const FinanceScreen()),
+              GoRoute(path: 'notifications', builder: (_, __) => const NotificationSettingsScreen()),
               GoRoute(path: 'notes', builder: (_, __) => const NotesScreen()),
               GoRoute(path: 'reports', builder: (_, __) => const ReportsScreen()),
               GoRoute(
