@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/permissions.dart';
 import '../../core/theme.dart';
-import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../data/section_models.dart';
 import '../../data/section_repository.dart';

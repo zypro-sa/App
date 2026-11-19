@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/permissions.dart';
 import '../../core/theme.dart';
-import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../widgets/common.dart';
 
