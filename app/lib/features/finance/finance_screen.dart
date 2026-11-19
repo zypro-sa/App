@@ -255,14 +255,18 @@ class _InvoiceList extends ConsumerWidget {
 
   String _subtitle(Invoice i) {
     if (i.status == InvoiceStatus.paid) return 'مدفوعة بالكامل';
-    if (i.isOverdue) return 'استحقت منذ ${DateTime.now().difference(i.dueDate).inDays} يومًا';
-    if (i.status == InvoiceStatus.partiallyPaid) {
-      return 'دُفع ${((i.paid / i.total) * 100).round()}٪ · الباقي ${formatShortDate(i.dueDate)}';
+    final parts = <String>[];
+    if (i.paid > 0) parts.add('دُفع ${moneyShort(i.paid)} · المتبقي ${moneyShort(i.remaining)}');
+    if (i.isOverdue) {
+      parts.add('متأخرة ${DateTime.now().difference(i.dueDate).inDays} يومًا');
+    } else {
+      parts.add('تستحق ${formatShortDate(i.dueDate)}');
     }
-    return 'تستحق ${formatShortDate(i.dueDate)}';
+    return parts.join(' · ');
   }
 
   Pill _pill(Invoice i) {
+    if (i.isOverdue && i.paid > 0) return Pill.urgent('جزئية · متأخرة');
     if (i.isOverdue) return Pill.urgent('متأخرة');
     switch (i.status) {
       case InvoiceStatus.paid:
