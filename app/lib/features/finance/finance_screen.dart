@@ -215,7 +215,7 @@ class _InvoiceList extends ConsumerWidget {
           for (var i = 0; i < list.length; i++) ...[
             if (i > 0) const Divider(height: 1, color: AppColors.divider),
             InkWell(
-              onTap: list[i].isOpen ? () => _recordPayment(context, ref, list, invoice: list[i]) : null,
+              onTap: () => showFormSheet(context, InvoiceSheet(invoiceId: list[i].id)),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Row(
@@ -254,6 +254,7 @@ class _InvoiceList extends ConsumerWidget {
   }
 
   String _subtitle(Invoice i) {
+    if (i.isVoid) return 'ملغاة · لا تُحسب في المستحق';
     if (i.status == InvoiceStatus.paid) return 'مدفوعة بالكامل';
     final parts = <String>[];
     if (i.paid > 0) parts.add('دُفع ${moneyShort(i.paid)} · المتبقي ${moneyShort(i.remaining)}');
@@ -266,6 +267,7 @@ class _InvoiceList extends ConsumerWidget {
   }
 
   Pill _pill(Invoice i) {
+    if (i.isVoid) return Pill.neutral('ملغاة');
     if (i.isOverdue && i.paid > 0) return Pill.urgent('جزئية · متأخرة');
     if (i.isOverdue) return Pill.urgent('متأخرة');
     switch (i.status) {
@@ -292,7 +294,9 @@ class _QuoteList extends ConsumerWidget {
         children: [
           for (var i = 0; i < list.length; i++) ...[
             if (i > 0) const Divider(height: 1, color: AppColors.divider),
-            Padding(
+            InkWell(
+              onTap: () => showFormSheet(context, QuoteSheet(quote: list[i])),
+              child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Row(
                 children: [
@@ -325,6 +329,7 @@ class _QuoteList extends ConsumerWidget {
                   ),
                 ],
               ),
+            ),
             ),
           ],
         ],
@@ -425,6 +430,314 @@ class _NewDocSheetState extends ConsumerState<_NewDocSheet> {
             ),
         ]),
       ],
+    );
+  }
+}
+
+
+/// تفاصيل الفاتورة وتعديلها: البيانات، الدفعات، الإلغاء، الحذف.
+class InvoiceSheet extends ConsumerWidget {
+  const InvoiceSheet({super.key, required this.invoiceId});
+  final String invoiceId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final inv = ref.watch(invoicesProvider).valueOrNull?.where((i) => i.id == invoiceId).firstOrNull;
+    final clients = ref.watch(clientsProvider).valueOrNull ?? const <Client>[];
+    final canDelete = ref.watch(profileProvider).valueOrNull?.can(Permissions.dataDelete) ?? false;
+    final repo = ref.read(sectionRepoProvider);
+    if (inv == null) {
+      return const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()));
+    }
+
+    Future<void> save(Map<String, dynamic> changes, {String? success}) async {
+      if (await runAction(context, () => repo.updateInvoice(inv.id, changes), success: success ?? 'حُفظ التعديل')) {
+        refreshSections(ref);
+      }
+    }
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text('فاتورة ${inv.number}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700))),
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              inv.isVoid
+                  ? 'ملغاة'
+                  : 'المدفوع ${money(inv.paid)} · المتبقي ${money(inv.remaining)}',
+              style: TextStyle(fontSize: 13, color: inv.isOverdue ? AppColors.urgent : AppColors.muted, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 14),
+            FormCard(children: [
+              FormRow(
+                label: 'رقم الفاتورة',
+                value: inv.number,
+                onTap: () async {
+                  final v = await promptText(context, 'رقم الفاتورة', initial: inv.number);
+                  if (v != null) await save({'number': v});
+                },
+              ),
+              FormDropdown<String>(
+                label: 'العميل',
+                value: inv.clientId,
+                allowEmpty: false,
+                items: {for (final c in clients) c.id: c.name},
+                onChanged: (v) {
+                  if (v != null) save({'client_id': v});
+                },
+              ),
+              FormRow(
+                label: 'الإجمالي شامل الضريبة',
+                value: money(inv.total),
+                onTap: () async {
+                  final v = await promptNumber(context, 'الإجمالي', label: 'بالريال', initial: inv.total);
+                  if (v != null && v >= 0) await save({'total': v});
+                },
+              ),
+              FormRow(
+                label: 'تاريخ الإصدار',
+                value: formatShortDate(inv.issueDate),
+                onTap: () async {
+                  final d = await pickDate(context, initial: inv.issueDate);
+                  if (d != null) await save({'issue_date': d.toIso8601String().substring(0, 10)});
+                },
+              ),
+              FormRow(
+                label: 'تاريخ الاستحقاق',
+                value: formatShortDate(inv.dueDate),
+                onTap: () async {
+                  final d = await pickDate(context, initial: inv.dueDate);
+                  if (d != null) await save({'due_date': d.toIso8601String().substring(0, 10)});
+                },
+              ),
+              FormRow(
+                label: 'الوصف',
+                value: (inv.notes == null || inv.notes!.isEmpty) ? 'أضف وصفًا' : inv.notes!,
+                muted: inv.notes == null || inv.notes!.isEmpty,
+                onTap: () async {
+                  final v = await promptText(context, 'وصف الفاتورة', initial: inv.notes, multiline: true);
+                  if (v != null) await save({'notes': v});
+                },
+              ),
+            ]),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('الدفعات', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
+                if (!inv.isVoid && inv.remaining > 0)
+                  TextButton.icon(
+                    onPressed: () => _recordPayment(context, ref, const [], invoice: inv),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('دفعة'),
+                  ),
+              ],
+            ),
+            if (inv.payments.isEmpty)
+              const Text('لا توجد دفعات مسجلة', style: TextStyle(color: AppColors.muted, fontSize: 13))
+            else
+              CardBox(
+                radius: 14,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < inv.payments.length; i++) ...[
+                      if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Text('${money(inv.payments[i].amount)} · ${formatShortDate(inv.payments[i].paidAt)}',
+                                  style: const TextStyle(fontSize: 14)),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'حذف الدفعة',
+                            icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.urgent),
+                            onPressed: () async {
+                              final ok = await confirmAction(context,
+                                  title: 'حذف الدفعة؟',
+                                  message: 'دفعة ${money(inv.payments[i].amount)} ستُحذف وتُعاد حالة الفاتورة تلقائيًا.',
+                                  confirmLabel: 'حذف',
+                                  destructive: true);
+                              if (!ok || !context.mounted) return;
+                              if (await runAction(context, () => repo.deletePayment(inv.payments[i].id), success: 'حُذفت الدفعة')) {
+                                refreshSections(ref);
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            const SizedBox(height: 18),
+            OutlinedButton(
+              onPressed: () async {
+                final ok = await confirmAction(
+                  context,
+                  title: inv.isVoid ? 'استعادة الفاتورة؟' : 'إلغاء الفاتورة؟',
+                  message: inv.isVoid
+                      ? 'تعود الفاتورة للحساب في المستحق، وتُحسب حالتها من دفعاتها.'
+                      : 'تبقى الفاتورة ظاهرة بحالة «ملغاة» ولا تُحسب في المستحق. يمكن استعادتها لاحقًا.',
+                  confirmLabel: inv.isVoid ? 'استعادة' : 'إلغاء الفاتورة',
+                );
+                if (ok) await save({'status': inv.isVoid ? 'issued' : 'void'}, success: inv.isVoid ? 'استُعيدت الفاتورة' : 'أُلغيت الفاتورة');
+              },
+              child: Text(inv.isVoid ? 'استعادة الفاتورة' : 'إلغاء الفاتورة (مرتجع كامل)'),
+            ),
+            if (canDelete) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: () async {
+                  final ok = await confirmAction(context,
+                      title: 'حذف الفاتورة ${inv.number}؟',
+                      message: 'تنتقل إلى سلة المحذوفات ويمكن استرجاعها خلال ٣٠ يومًا.',
+                      confirmLabel: 'حذف',
+                      destructive: true);
+                  if (!ok || !context.mounted) return;
+                  if (await runAction(context, () => repo.softDelete('invoices', [inv.id]), success: 'نُقلت إلى السلة')) {
+                    refreshSections(ref);
+                    if (context.mounted) Navigator.pop(context);
+                  }
+                },
+                icon: const Icon(Icons.delete_outline, color: AppColors.urgent),
+                label: const Text('حذف الفاتورة', style: TextStyle(color: AppColors.urgent)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// تفاصيل عرض السعر وتعديله وتحويله إلى فاتورة.
+class QuoteSheet extends ConsumerWidget {
+  const QuoteSheet({super.key, required this.quote});
+  final Quote quote;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final q = ref.watch(quotesProvider).valueOrNull?.where((x) => x.id == quote.id).firstOrNull ?? quote;
+    final clients = ref.watch(clientsProvider).valueOrNull ?? const <Client>[];
+    final canDelete = ref.watch(profileProvider).valueOrNull?.can(Permissions.dataDelete) ?? false;
+    final repo = ref.read(sectionRepoProvider);
+
+    Future<void> save(Map<String, dynamic> changes, {String? success}) async {
+      if (await runAction(context, () => repo.updateQuote(q.id, changes), success: success ?? 'حُفظ التعديل')) {
+        refreshSections(ref);
+      }
+    }
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text('عرض سعر ${q.number}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700))),
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
+              ],
+            ),
+            const SizedBox(height: 12),
+            FormCard(children: [
+              FormDropdown<String>(
+                label: 'العميل',
+                value: q.clientId,
+                allowEmpty: false,
+                items: {for (final c in clients) c.id: c.name},
+                onChanged: (v) {
+                  if (v != null) save({'client_id': v});
+                },
+              ),
+              FormRow(
+                label: 'المبلغ قبل الضريبة',
+                value: money(q.amount),
+                onTap: () async {
+                  final v = await promptNumber(context, 'المبلغ قبل الضريبة', initial: q.amount);
+                  if (v != null && v >= 0) await save({'amount': v, 'vat_amount': q.vat > 0 ? v * 0.15 : 0});
+                },
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('ضريبة ١٥٪ (${money(q.vat)})', style: const TextStyle(fontSize: 14)),
+                value: q.vat > 0,
+                onChanged: (v) => save({'vat_amount': v ? q.amount * 0.15 : 0}),
+              ),
+              FormDropdown<QuoteStatus>(
+                label: 'الحالة',
+                value: q.status,
+                allowEmpty: false,
+                items: {for (final s in QuoteStatus.values) s: s.label},
+                onChanged: (v) {
+                  if (v != null) save({'status': v.db, if (v == QuoteStatus.sent && q.sentAt == null) 'sent_at': DateTime.now().toIso8601String().substring(0, 10)});
+                },
+              ),
+              FormRow(
+                label: 'الوصف',
+                value: (q.notes == null || q.notes!.isEmpty) ? 'أضف وصفًا' : q.notes!,
+                muted: q.notes == null || q.notes!.isEmpty,
+                onTap: () async {
+                  final v = await promptText(context, 'وصف عرض السعر', initial: q.notes, multiline: true);
+                  if (v != null) await save({'notes': v});
+                },
+              ),
+            ]),
+            const SizedBox(height: 10),
+            Text('الإجمالي شامل الضريبة: ${money(q.total)}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: q.clientId == null
+                  ? null
+                  : () async {
+                      final due = await pickDate(context, initial: DateTime.now().add(const Duration(days: 30)));
+                      if (due == null || !context.mounted) return;
+                      if (await runAction(context, () => repo.quoteToInvoice(q, due), success: 'أُنشئت فاتورة من عرض السعر')) {
+                        refreshSections(ref);
+                        if (context.mounted) Navigator.pop(context);
+                      }
+                    },
+              child: const Text('تحويل إلى فاتورة'),
+            ),
+            if (canDelete) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: () async {
+                  final ok = await confirmAction(context,
+                      title: 'حذف عرض السعر ${q.number}؟',
+                      message: 'ينتقل إلى سلة المحذوفات ويمكن استرجاعه خلال ٣٠ يومًا.',
+                      confirmLabel: 'حذف',
+                      destructive: true);
+                  if (!ok || !context.mounted) return;
+                  if (await runAction(context, () => repo.softDelete('quotes', [q.id]), success: 'نُقل إلى السلة')) {
+                    refreshSections(ref);
+                    if (context.mounted) Navigator.pop(context);
+                  }
+                },
+                icon: const Icon(Icons.delete_outline, color: AppColors.urgent),
+                label: const Text('حذف عرض السعر', style: TextStyle(color: AppColors.urgent)),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

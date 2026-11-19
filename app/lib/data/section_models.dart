@@ -131,7 +131,15 @@ class Invoice {
     required this.dueDate,
     required this.status,
     this.clientName,
+    this.clientId,
+    this.notes,
+    this.payments = const [],
   });
+
+  final String? clientId;
+  final String? notes;
+  final List<PaymentEntry> payments;
+  bool get isVoid => status == InvoiceStatus.voided;
 
   final String id;
   final String number;
@@ -150,10 +158,15 @@ class Invoice {
   }
 
   static const select =
-      'id, number, total, issue_date, due_date, status, client:clients(name), payments(amount, paid_at, deleted_at)';
+      'id, number, total, issue_date, due_date, status, notes, client_id, client:clients(name), '
+      'payments(id, amount, paid_at, deleted_at)';
 
   factory Invoice.fromMap(Map<String, dynamic> m) {
-    final pays = ((m['payments'] ?? []) as List).where((p) => p['deleted_at'] == null);
+    final pays = ((m['payments'] ?? []) as List).where((p) => p['deleted_at'] == null).toList();
+    final entries = pays
+        .map((p) => PaymentEntry(p['id'] as String, _num(p['amount']), _d(p['paid_at'])!))
+        .toList()
+      ..sort((a, b) => a.paidAt.compareTo(b.paidAt));
     return Invoice(
       id: m['id'] as String,
       number: m['number'] as String,
@@ -163,12 +176,16 @@ class Invoice {
       dueDate: _d(m['due_date'])!,
       status: InvoiceStatus.from(m['status'] as String?),
       clientName: _nested(m['client'], 'name'),
+      clientId: m['client_id'] as String?,
+      notes: m['notes'] as String?,
+      payments: entries,
     );
   }
 }
 
 class PaymentEntry {
-  PaymentEntry(this.amount, this.paidAt);
+  PaymentEntry(this.id, this.amount, this.paidAt);
+  final String id;
   final num amount;
   final DateTime paidAt;
 }
@@ -204,7 +221,12 @@ class Quote {
     required this.status,
     this.clientName,
     this.sentAt,
+    this.clientId,
+    this.notes,
   });
+
+  final String? clientId;
+  final String? notes;
 
   final String id;
   final String number;
@@ -216,7 +238,7 @@ class Quote {
 
   num get total => amount + vat;
 
-  static const select = 'id, number, amount, vat_amount, status, sent_at, client:clients(name)';
+  static const select = 'id, number, amount, vat_amount, status, sent_at, notes, client_id, client:clients(name)';
 
   factory Quote.fromMap(Map<String, dynamic> m) => Quote(
         id: m['id'] as String,
@@ -226,6 +248,8 @@ class Quote {
         status: QuoteStatus.from(m['status'] as String?),
         clientName: _nested(m['client'], 'name'),
         sentAt: _d(m['sent_at']),
+        clientId: m['client_id'] as String?,
+        notes: m['notes'] as String?,
       );
 }
 

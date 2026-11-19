@@ -114,12 +114,11 @@ class SectionRepository {
         .from('invoices')
         .select(Invoice.select)
         .isFilter('deleted_at', null)
-        .neq('status', 'void')
         .order('due_date', ascending: true);
     final list = rows.map(Invoice.fromMap).toList();
-    // المفتوحة أولًا (المتأخرة في المقدمة) ثم المدفوعة
+    // المتأخرة ثم المفتوحة ثم المدفوعة ثم الملغاة
     list.sort((a, b) {
-      int rank(Invoice i) => i.isOverdue ? 0 : (i.isOpen ? 1 : 2);
+      int rank(Invoice i) => i.isVoid ? 3 : (i.isOverdue ? 0 : (i.isOpen ? 1 : 2));
       final r = rank(a).compareTo(rank(b));
       return r != 0 ? r : a.dueDate.compareTo(b.dueDate);
     });
@@ -148,6 +147,28 @@ class SectionRepository {
         'total': total,
         'due_date': _isoDate(dueDate),
       });
+
+  Future<void> updateInvoice(String id, Map<String, dynamic> changes) =>
+      _db.from('invoices').update(changes).eq('id', id);
+
+  Future<void> deletePayment(String id) => _db.from('payments').delete().eq('id', id);
+
+  Future<void> updateQuote(String id, Map<String, dynamic> changes) =>
+      _db.from('quotes').update(changes).eq('id', id);
+
+  /// يحوّل عرض السعر المقبول إلى فاتورة بإجماليه شامل الضريبة.
+  Future<void> quoteToInvoice(Quote q, DateTime dueDate) async {
+    await _db.from('invoices').insert({
+      'client_id': q.clientId,
+      'quote_id': q.id,
+      'total': q.total,
+      'due_date': _isoDate(dueDate),
+      if (q.notes != null) 'notes': q.notes,
+    });
+    if (q.status != QuoteStatus.accepted) {
+      await _db.from('quotes').update({'status': 'accepted'}).eq('id', q.id);
+    }
+  }
 
   Future<void> recordPayment(String invoiceId, num amount) =>
       _db.from('payments').insert({'invoice_id': invoiceId, 'amount': amount, 'method': 'bank_transfer'});
