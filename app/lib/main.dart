@@ -13,8 +13,7 @@ Future<void> main() async {
   await initializeDateFormatting('ar');
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
-    // يقبل المفتاح الجديد sb_publishable_… أو المفتاح القديم anon
-    anonKey: AppConfig.supabaseKey,
+    publishableKey: AppConfig.supabaseKey,
   );
   runApp(const ProviderScope(child: PersonalAssistantApp()));
 }
