@@ -109,7 +109,7 @@ class _Body extends ConsumerWidget {
     final r = d.item;
     final cfg = ref.watch(fieldConfigProvider(ConfigEntity.request)).valueOrNull ?? FieldConfig(const []);
     final sl = labels[r.status.db];
-    final progressColor = r.isOverdue ? const Color(0xFFC2410C) : (r.progress >= 100 ? AppColors.done : AppColors.primary);
+    final progressColor = r.isOverdue ? const Color(0xFFC2410C) : AppColors.accent;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -130,7 +130,7 @@ class _Body extends ConsumerWidget {
                         '#${r.number}${r.clientName != null ? ' · ${r.clientName}' : ''}',
                         style: TextStyle(
                           fontSize: 13,
-                          color: d.clientId == null ? AppColors.muted : AppColors.primary,
+                          color: d.clientId == null ? AppColors.muted : AppColors.accentText,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -318,7 +318,7 @@ class _Steps extends ConsumerWidget {
                                 Text('تمت ${relativeDay(d.steps[i].doneAt!)}',
                                     style: const TextStyle(fontSize: 11, color: AppColors.done)),
                               if (i == firstOpen)
-                                const Text('الخطوة الحالية', style: TextStyle(fontSize: 11, color: AppColors.primary)),
+                                const Text('الخطوة الحالية', style: TextStyle(fontSize: 11, color: AppColors.accentText)),
                             ],
                           ),
                         ),

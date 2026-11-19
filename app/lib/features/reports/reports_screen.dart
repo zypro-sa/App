@@ -144,7 +144,7 @@ class _Body extends StatelessWidget {
                             color: (t.$3 ?? 0) >= 90
                                 ? AppColors.done
                                 : (t.$3 ?? 0) >= 75
-                                    ? AppColors.primary
+                                    ? const Color(0xFF8FE3C6)
                                     : const Color(0xFFC2410C),
                           ),
                         ),
@@ -225,13 +225,13 @@ class _WeeklyBars extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: i == weeks.length - 1 ? FontWeight.w700 : FontWeight.w400,
-                            color: i == weeks.length - 1 ? AppColors.primary : AppColors.muted,
+                            color: i == weeks.length - 1 ? AppColors.accentText : AppColors.muted,
                           )),
                       const SizedBox(height: 4),
                       Container(
                         height: 70 * weeks[i].$2 / max + 4,
                         decoration: BoxDecoration(
-                          color: i == weeks.length - 1 ? AppColors.primary : const Color(0xFFC9D5F6),
+                          color: i == weeks.length - 1 ? AppColors.accent : const Color(0xFFC6F0E1),
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(6), bottom: Radius.circular(2)),
                         ),
                       ),

@@ -58,7 +58,7 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Avatar('م', size: 64, fg: Colors.white, bg: AppColors.primary, radius: 20),
+                Center(child: Image.asset('assets/brand/zypro_wordmark.png', width: 170, semanticLabel: 'Zypro')),
                 const SizedBox(height: 16),
                 Text(
                   name == null ? 'مرحبًا بك' : 'مرحبًا $name',

@@ -54,7 +54,7 @@ class Pill extends StatelessWidget {
   factory Pill.waiting(String label) =>
       Pill(label, fg: AppColors.waiting, bg: AppColors.waitingSoft);
   factory Pill.info(String label) =>
-      Pill(label, fg: AppColors.primary, bg: AppColors.primarySoft);
+      Pill(label, fg: AppColors.accentText, bg: AppColors.primarySoft);
   factory Pill.neutral(String label) =>
       Pill(label, fg: AppColors.subtle, bg: AppColors.neutralSoft);
   factory Pill.done(String label) =>
@@ -161,7 +161,7 @@ class TaskCheck extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final border = done
-        ? AppColors.done
+        ? AppColors.accent
         : overdue
             ? const Color(0xFFC2410C)
             : const Color(0xFF9AA2AE);
@@ -181,11 +181,11 @@ class TaskCheck extends StatelessWidget {
               width: 24,
               height: 24,
               decoration: BoxDecoration(
-                color: done ? AppColors.done : Colors.white,
+                color: done ? AppColors.accent : Colors.white,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: border, width: 2),
               ),
-              child: done ? const Icon(Icons.check, size: 16, color: Colors.white) : null,
+              child: done ? const Icon(Icons.check, size: 16, color: AppColors.ink) : null,
             ),
           ),
         ),
@@ -196,7 +196,7 @@ class TaskCheck extends StatelessWidget {
 
 /// شريط تقدم رفيع.
 class ProgressLine extends StatelessWidget {
-  const ProgressLine(this.value, {super.key, this.color = AppColors.primary, this.height = 6});
+  const ProgressLine(this.value, {super.key, this.color = AppColors.accent, this.height = 6});
 
   final int value;
   final Color color;

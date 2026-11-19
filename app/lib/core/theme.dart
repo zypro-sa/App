@@ -2,15 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// ألوان التصميم المعتمد.
+/// ألوان هوية Zypro (مأخوذة من الشعار).
 class AppColors {
-  static const primary = Color(0xFF1F4FD1);
-  static const primarySoft = Color(0xFFE8EEFC);
-  static const ink = Color(0xFF141821);
-  static const muted = Color(0xFF5B6472);
-  static const subtle = Color(0xFF3D4552);
-  static const line = Color(0xFFE3E6EB);
+  // الكحلي: الأزرار الرئيسية والعناوين والعناصر النشطة
+  static const primary = Color(0xFF34343F);
+  // الأخضر الفاتح: خلفيات التمييز الخفيفة
+  static const primarySoft = Color(0xFFE3F8F0);
+  // أخضر الشعار: نسبة الإنجاز وزر الإضافة والتمييز (لا يُكتب عليه بالأبيض)
+  static const accent = Color(0xFF18C894);
+  // أخضر غامق: الروابط والنصوص الخضراء
+  static const accentText = Color(0xFF0B7A57);
+  static const ink = Color(0xFF34343F);
+  static const muted = Color(0xFF5B5E6B);
+  static const subtle = Color(0xFF4A4D59);
+  static const line = Color(0xFFE4E6EA);
   static const divider = Color(0xFFEEF0F3);
-  static const background = Color(0xFFF4F5F8);
+  static const background = Color(0xFFF5F6F7);
   static const surface = Colors.white;
 
   static const urgent = Color(0xFF9A3412);
@@ -18,8 +25,8 @@ class AppColors {
   static const urgentBorder = Color(0xFFF6D3C0);
   static const waiting = Color(0xFF7A4F00);
   static const waitingSoft = Color(0xFFFFF4D6);
-  static const done = Color(0xFF1E7A46);
-  static const doneSoft = Color(0xFFE6F4EC);
+  static const done = Color(0xFF0B7A57);
+  static const doneSoft = Color(0xFFE3F8F0);
   static const neutralSoft = Color(0xFFEEF0F3);
 }
 
@@ -27,8 +34,11 @@ ThemeData buildTheme() {
   final base = ThemeData(
     useMaterial3: true,
     colorScheme: ColorScheme.fromSeed(
-      seedColor: AppColors.primary,
+      seedColor: AppColors.accent,
       primary: AppColors.primary,
+      onPrimary: Colors.white,
+      secondary: AppColors.accent,
+      onSecondary: AppColors.ink,
       surface: AppColors.surface,
     ),
     scaffoldBackgroundColor: AppColors.background,
@@ -61,14 +71,32 @@ ThemeData buildTheme() {
               ? FontWeight.w700
               : FontWeight.w500,
           color: states.contains(WidgetState.selected)
-              ? AppColors.primary
+              ? AppColors.ink
               : AppColors.muted,
         ),
       ),
     ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(foregroundColor: AppColors.accentText),
+    ),
+    switchTheme: SwitchThemeData(
+      trackColor: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected) ? AppColors.accent : null,
+      ),
+      thumbColor: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected) ? Colors.white : null,
+      ),
+    ),
+    checkboxTheme: CheckboxThemeData(
+      fillColor: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected) ? AppColors.accent : null,
+      ),
+      checkColor: const WidgetStatePropertyAll(AppColors.ink),
+    ),
+    progressIndicatorTheme: const ProgressIndicatorThemeData(color: AppColors.accent),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
-      backgroundColor: AppColors.ink,
-      foregroundColor: Colors.white,
+      backgroundColor: AppColors.accent,
+      foregroundColor: AppColors.ink,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(18)),
       ),

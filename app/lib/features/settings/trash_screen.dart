@@ -35,11 +35,11 @@ class TrashScreen extends ConsumerWidget {
               decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(14)),
               child: const Row(
                 children: [
-                  Icon(Icons.restore, size: 18, color: Color(0xFF163BA0)),
+                  Icon(Icons.restore, size: 18, color: AppColors.accentText),
                   SizedBox(width: 10),
                   Expanded(
                     child: Text('الاسترجاع يعيد العنصر بكل بياناته وارتباطاته',
-                        style: TextStyle(fontSize: 13, color: Color(0xFF163BA0))),
+                        style: TextStyle(fontSize: 13, color: AppColors.accentText)),
                   ),
                 ],
               ),
