@@ -37,11 +37,12 @@ Deno.serve(async (req) => {
     const { data: auth, error: authError } = await admin.auth.getUser(token);
     if (authError || !auth.user) return json({ error: "يجب تسجيل الدخول" }, 401);
 
-    const { data: me } = await admin
+    const { data: me, error: meError } = await admin
       .from("profiles")
       .select("role, is_active")
       .eq("id", auth.user.id)
       .single();
+    if (meError) return json({ error: `تعذّر قراءة الملف الشخصي: ${meError.message}` }, 500);
     if (!me || me.role !== "owner" || !me.is_active) {
       return json({ error: "إضافة الأعضاء للمالك فقط" }, 403);
     }
