@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/permissions.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
@@ -24,8 +25,9 @@ class _SectionSettingsScreenState extends ConsumerState<SectionSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final role = ref.watch(profileProvider).valueOrNull?.role;
-    final isOwner = role == UserRole.owner;
+    final me = ref.watch(profileProvider).valueOrNull;
+    final canFields = me?.can(Permissions.settingsFields) ?? false;
+    final canLists = canFields || (me?.can(Permissions.settingsLists) ?? false);
     return Scaffold(
       appBar: sectionAppBar('إعدادات ${widget.entity.label}', subtitle: 'ما يظهر في نموذج الإضافة وعلى البطاقة'),
       body: ListView(
@@ -42,8 +44,8 @@ class _SectionSettingsScreenState extends ConsumerState<SectionSettingsScreen> {
             onSelectionChanged: (s) => setState(() => _tab = s.first),
           ),
           const SizedBox(height: 14),
-          if (_tab == 0) _FieldsTab(entity: widget.entity, editable: isOwner),
-          if (_tab == 1) _ListsTab(entity: widget.entity, canEditStatuses: isOwner),
+          if (_tab == 0) _FieldsTab(entity: widget.entity, editable: canFields),
+          if (_tab == 1) _ListsTab(entity: widget.entity, canEditStatuses: canFields, canEditOptions: canLists),
           if (_tab == 2) _DataTab(entity: widget.entity),
         ],
       ),
@@ -78,7 +80,7 @@ class _FieldsTab extends ConsumerWidget {
           if (!editable)
             const Padding(
               padding: EdgeInsets.only(bottom: 10),
-              child: Text('تعديل الحقول للمالك فقط', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+              child: Text('ليست لديك صلاحية تعديل الحقول', style: TextStyle(fontSize: 12, color: AppColors.muted)),
             ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -356,9 +358,10 @@ class _FieldEditorSheetState extends ConsumerState<FieldEditorSheet> {
 
 // ---------------- القوائم ----------------
 class _ListsTab extends ConsumerWidget {
-  const _ListsTab({required this.entity, required this.canEditStatuses});
+  const _ListsTab({required this.entity, required this.canEditStatuses, required this.canEditOptions});
   final ConfigEntity entity;
   final bool canEditStatuses;
+  final bool canEditOptions;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -391,6 +394,7 @@ class _ListsTab extends ConsumerWidget {
                     Row(
                       children: [
                         Expanded(child: Text(f.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700))),
+                        if (canEditOptions)
                         OutlinedButton(
                           style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34)),
                           onPressed: () async {
@@ -409,7 +413,7 @@ class _ListsTab extends ConsumerWidget {
                         for (final o in f.options)
                           InputChip(
                             label: Text(o),
-                            onDeleted: () => saveOptions(f, f.options.where((x) => x != o).toList()),
+                            onDeleted: canEditOptions ? () => saveOptions(f, f.options.where((x) => x != o).toList()) : null,
                           ),
                       ],
                     ),

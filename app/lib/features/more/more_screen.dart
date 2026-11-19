@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/permissions.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
@@ -15,8 +16,7 @@ class MoreScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(profileProvider).valueOrNull;
-    final isOwner = profile?.role == UserRole.owner;
-    final isEmployee = profile?.role == UserRole.employee;
+    bool can(String k) => profile?.can(k) ?? false;
 
     void soon() => showSnack(context, 'هذا القسم في المرحلة القادمة');
 
@@ -24,9 +24,9 @@ class MoreScreen extends ConsumerWidget {
       _Section('العملاء', Icons.people_outline, AppColors.primary, AppColors.primarySoft, () => context.go('/more/clients')),
       _Section('المشاريع', Icons.folder_outlined, AppColors.done, AppColors.doneSoft, () => context.go('/more/projects')),
       _Section('المتابعات', Icons.schedule, AppColors.waiting, AppColors.waitingSoft, () => context.go('/more/followups')),
-      if (isOwner) _Section('المالية', Icons.receipt_long_outlined, AppColors.urgent, AppColors.urgentSoft, () => context.go('/more/finance')),
+      if (can(Permissions.financeManage)) _Section('المالية', Icons.receipt_long_outlined, AppColors.urgent, AppColors.urgentSoft, () => context.go('/more/finance')),
       _Section('الملاحظات', Icons.sticky_note_2_outlined, AppColors.subtle, AppColors.neutralSoft, () => context.go('/more/notes')),
-      if (!isEmployee) _Section('التقارير', Icons.bar_chart, AppColors.primary, AppColors.primarySoft, () => context.go('/more/reports')),
+      if (can(Permissions.reportsView)) _Section('التقارير', Icons.bar_chart, AppColors.primary, AppColors.primarySoft, () => context.go('/more/reports')),
     ];
 
     return Scaffold(
@@ -68,7 +68,7 @@ class MoreScreen extends ConsumerWidget {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
-                  if (!isEmployee) ...[
+                  if (can(Permissions.settingsFields) || can(Permissions.settingsLists) || can(Permissions.dataDelete)) ...[
                     ListTile(
                       title: const Text('لوحة التحكم والإعدادات', style: TextStyle(fontWeight: FontWeight.w600)),
                       trailing: const Icon(Icons.chevron_left),

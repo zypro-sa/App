@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatters.dart';
+import '../../core/permissions.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
@@ -17,7 +18,9 @@ class TrashScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final trash = ref.watch(trashProvider);
-    final isOwner = ref.watch(profileProvider).valueOrNull?.role == UserRole.owner;
+    final me = ref.watch(profileProvider).valueOrNull;
+    final isOwner = me?.role == UserRole.owner;
+    final canRestore = me?.can(Permissions.dataDelete) ?? false;
     final repo = ref.read(sectionRepoProvider);
 
     return Scaffold(
@@ -65,7 +68,7 @@ class TrashScreen extends ConsumerWidget {
                           children: [
                             for (var i = 0; i < g.value.length; i++) ...[
                               if (i > 0) const Divider(height: 1, color: AppColors.divider),
-                              _TrashRow(item: g.value[i], canPurge: isOwner),
+                              _TrashRow(item: g.value[i], canPurge: isOwner, canRestore: canRestore),
                             ],
                           ],
                         ),
@@ -113,9 +116,10 @@ class TrashScreen extends ConsumerWidget {
 }
 
 class _TrashRow extends ConsumerWidget {
-  const _TrashRow({required this.item, required this.canPurge});
+  const _TrashRow({required this.item, required this.canPurge, required this.canRestore});
   final TrashItem item;
   final bool canPurge;
+  final bool canRestore;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -146,6 +150,7 @@ class _TrashRow extends ConsumerWidget {
               ],
             ),
           ),
+          if (canRestore)
           OutlinedButton(
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(0, 34),

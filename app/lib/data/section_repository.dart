@@ -228,6 +228,10 @@ class SectionRepository {
   Future<void> setMemberRole(String id, UserRole role) =>
       _db.from('profiles').update({'role': role.db}).eq('id', id);
 
+  /// يحفظ فقط ما يختلف عن الافتراضي لدور العضو.
+  Future<void> setMemberPermissions(String id, Map<String, bool> overrides) =>
+      _db.from('profiles').update({'permissions': overrides}).eq('id', id);
+
   Future<void> setMemberActive(String id, bool active) =>
       _db.from('profiles').update({'is_active': active}).eq('id', id);
 

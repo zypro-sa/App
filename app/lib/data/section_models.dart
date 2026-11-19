@@ -1,4 +1,5 @@
 // نماذج المرحلة الثانية: المشاريع، المالية، الملاحظات، الفريق، الإعدادات، السلة، التقارير.
+import '../core/permissions.dart';
 import 'models.dart';
 
 DateTime? _ts(dynamic v) => v == null ? null : DateTime.parse(v as String).toLocal();
@@ -281,7 +282,13 @@ class TeamMember {
     required this.openTasks,
     required this.openRequests,
     this.jobTitle,
+    this.permissions = const {},
   });
+
+  final Map<String, dynamic> permissions;
+  bool can(String key) => Permissions.effective(role, permissions, key);
+  bool isCustomized(String key) =>
+      role != UserRole.owner && permissions[key] is bool && permissions[key] != Permissions.roleDefault(role, key);
 
   final String id;
   final String name;
@@ -305,6 +312,7 @@ class TeamMember {
         openTasks: _num(m['open_tasks']).toInt(),
         openRequests: _num(m['open_requests']).toInt(),
         jobTitle: m['job_title'] as String?,
+        permissions: Map<String, dynamic>.from((m['permissions'] ?? const {}) as Map),
       );
 }
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/formatters.dart';
+import '../../core/permissions.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
@@ -24,11 +25,11 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final role = ref.watch(profileProvider).valueOrNull?.role;
-    if (role != null && role != UserRole.owner) {
+    final me = ref.watch(profileProvider).valueOrNull;
+    if (me != null && !me.can(Permissions.financeManage)) {
       return Scaffold(
         appBar: sectionAppBar('المالية'),
-        body: const EmptyState('هذا القسم للمالك فقط', icon: Icons.lock_outline),
+        body: const EmptyState('ليست لديك صلاحية المالية', icon: Icons.lock_outline),
       );
     }
     final summary = ref.watch(financeSummaryProvider);
@@ -43,7 +44,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 14),
-            child: Pill.neutral('للمالك فقط'),
+            child: Pill.neutral('صلاحية خاصة'),
           ),
         ],
       ),

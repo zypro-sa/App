@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/permissions.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
@@ -24,9 +25,10 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final role = ref.watch(profileProvider).valueOrNull?.role;
-    if (role == UserRole.employee) {
-      return Scaffold(appBar: sectionAppBar('لوحة التحكم'), body: const EmptyState('لوحة التحكم للمالك والمدير', icon: Icons.lock_outline));
+    final me = ref.watch(profileProvider).valueOrNull;
+    bool can(String k) => me?.can(k) ?? false;
+    if (me != null && !can(Permissions.settingsFields) && !can(Permissions.settingsLists) && !can(Permissions.dataDelete)) {
+      return Scaffold(appBar: sectionAppBar('لوحة التحكم'), body: const EmptyState('ليست لديك صلاحية لوحة التحكم', icon: Icons.lock_outline));
     }
     final counts = ref.watch(fieldCountsProvider).valueOrNull ?? const {};
     final trashCount = ref.watch(trashProvider).valueOrNull?.length;
@@ -87,7 +89,7 @@ class SettingsScreen extends ConsumerWidget {
                 Icon(Icons.lock_outline, size: 16, color: AppColors.subtle),
                 SizedBox(width: 8),
                 Expanded(
-                  child: Text('الحقول للمالك فقط · المدير يعدّل خيارات القوائم',
+                  child: Text('ما يظهر هنا حسب صلاحياتك · يحددها المالك من الفريق والصلاحيات',
                       style: TextStyle(fontSize: 12, color: AppColors.subtle)),
                 ),
               ],

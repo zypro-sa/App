@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatters.dart';
+import '../../core/permissions.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
@@ -214,8 +215,14 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   Widget build(BuildContext context) {
     final clients = ref.watch(clientsProvider).valueOrNull ?? const <Client>[];
     final team = ref.watch(teamProvider).valueOrNull ?? const <Profile>[];
-    final role = ref.watch(profileProvider).valueOrNull?.role;
-    final canAssign = role == UserRole.owner || role == UserRole.manager;
+    final me = ref.watch(profileProvider).valueOrNull;
+    final canAssign = me?.can(Permissions.tasksAssign) ?? false;
+    final allowedTypes = QuickAddType.values.where((t) => switch (t) {
+          QuickAddType.request => me?.can(Permissions.requestsManage) ?? false,
+          QuickAddType.meeting => me?.can(Permissions.meetingsManage) ?? false,
+          _ => true,
+        }).toList();
+    if (!allowedTypes.contains(_type)) _type = QuickAddType.task;
     final entity = _entity;
     final cfg = entity == null
         ? FieldConfig(const [])
@@ -242,7 +249,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             const SizedBox(height: 12),
             Row(
               children: [
-                for (final t in QuickAddType.values)
+                for (final t in allowedTypes)
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 3),

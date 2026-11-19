@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatters.dart';
+import '../../core/permissions.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
@@ -26,8 +27,7 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final project = ref.watch(projectProvider(widget.projectId));
-    final role = ref.watch(profileProvider).valueOrNull?.role;
-    final canManage = role == UserRole.owner || role == UserRole.manager;
+    final canManage = ref.watch(profileProvider).valueOrNull?.can(Permissions.projectsManage) ?? false;
 
     return Scaffold(
       appBar: AppBar(

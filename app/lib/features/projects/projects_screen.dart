@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/formatters.dart';
+import '../../core/permissions.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
@@ -32,8 +33,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
     };
     final active = counts[ProjectStatus.active] ?? 0;
     final soon = projects.valueOrNull?.where((p) => (p.daysLeft ?? 99) <= 7 && (p.daysLeft ?? -1) >= 0).length ?? 0;
-    final role = ref.watch(profileProvider).valueOrNull?.role;
-    final canCreate = role == UserRole.owner || role == UserRole.manager;
+    final canCreate = ref.watch(profileProvider).valueOrNull?.can(Permissions.projectsManage) ?? false;
 
     return Scaffold(
       appBar: sectionAppBar(
