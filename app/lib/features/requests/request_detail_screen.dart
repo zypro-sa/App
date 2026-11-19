@@ -229,6 +229,28 @@ class _Body extends ConsumerWidget {
             ),
           ),
         ],
+        if (canEdit && r.status.isOpen && d.steps.isNotEmpty && d.doneSteps == d.steps.length) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(16)),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text('كل الخطوات تمت. أغلق الطلب ليبدأ تحصيل المتبقي من فواتيره.',
+                      style: TextStyle(fontSize: 13, height: 1.6, color: AppColors.accentText, fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+                  onPressed: () => update({'status': 'closed'}, success: 'أُغلق الطلب'),
+                  child: const Text('إغلاق الطلب'),
+                ),
+              ],
+            ),
+          ),
+        ],
+        _LinkedInvoices(requestId: r.id, open: r.status.isOpen),
         const SizedBox(height: 18),
         _Steps(d: d, canEdit: canEdit),
       ],
@@ -351,6 +373,56 @@ class _Steps extends ConsumerWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// الفواتير المرتبطة بالطلب (لمن يملك صلاحية المالية).
+class _LinkedInvoices extends ConsumerWidget {
+  const _LinkedInvoices({required this.requestId, required this.open});
+  final String requestId;
+  final bool open;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final canFinance = ref.watch(profileProvider).valueOrNull?.can(Permissions.financeManage) ?? false;
+    if (!canFinance) return const SizedBox.shrink();
+    final list = ref.watch(requestInvoicesProvider(requestId)).valueOrNull ?? const <Invoice>[];
+    if (list.isEmpty) return const SizedBox.shrink();
+    final remaining = list.where((i) => !i.isVoid).fold<num>(0, (a, i) => a + i.remaining);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: CardBox(
+        radius: 16,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('الفواتير المرتبطة', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.subtle)),
+                ),
+                if (remaining > 0) Pill.waiting('المتبقي ${moneyShort(remaining)}') else Pill.done('مسددة'),
+              ],
+            ),
+            const SizedBox(height: 6),
+            for (final i in list)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(
+                  '${i.number} · ${moneyShort(i.net)} · ${i.isVoid ? 'ملغاة' : (i.remaining > 0 ? 'متبقٍ ${moneyShort(i.remaining)}' : 'مدفوعة')}',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+            if (open && remaining > 0)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text('متابعة التحصيل تُنشأ تلقائيًا عند إغلاق الطلب',
+                    style: TextStyle(fontSize: 11, color: AppColors.muted)),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

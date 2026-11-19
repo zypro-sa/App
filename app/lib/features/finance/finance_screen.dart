@@ -496,6 +496,18 @@ class InvoiceSheet extends ConsumerWidget {
                   if (v != null) save({'client_id': v});
                 },
               ),
+              FormDropdown<String>(
+                label: 'الطلب المرتبط',
+                value: inv.requestId,
+                emptyLabel: 'بدون',
+                items: {
+                  for (final r in (inv.clientId == null
+                      ? const <RequestItem>[]
+                      : (ref.watch(clientRequestsProvider(inv.clientId!)).valueOrNull ?? const <RequestItem>[])))
+                    r.id: '#${r.number} · ${r.title}',
+                },
+                onChanged: (v) => save({'request_id': v}, success: v == null ? 'أُلغي الربط' : 'رُبطت الفاتورة بالطلب'),
+              ),
               FormRow(
                 label: inv.returned > 0 ? 'الإجمالي قبل المرتجع' : 'الإجمالي شامل الضريبة',
                 value: money(inv.total),
