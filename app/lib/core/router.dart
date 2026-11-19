@@ -24,6 +24,7 @@ import '../features/home/home_screen.dart';
 import '../features/meetings/meetings_screen.dart';
 import '../features/more/more_screen.dart';
 import '../features/quick_add/quick_add_sheet.dart';
+import '../features/requests/request_detail_screen.dart';
 import '../features/requests/requests_screen.dart';
 import '../features/tasks/tasks_screen.dart';
 
@@ -77,7 +78,13 @@ final appRouter = GoRouter(
           GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
         ]),
         StatefulShellBranch(routes: [
-          GoRoute(path: '/requests', builder: (_, __) => const RequestsScreen()),
+          GoRoute(
+            path: '/requests',
+            builder: (_, __) => const RequestsScreen(),
+            routes: [
+              GoRoute(path: ':id', builder: (_, s) => RequestDetailScreen(requestId: s.pathParameters['id']!)),
+            ],
+          ),
         ]),
         StatefulShellBranch(routes: [
           GoRoute(path: '/tasks', builder: (_, __) => const TasksScreen()),

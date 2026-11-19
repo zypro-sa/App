@@ -369,6 +369,36 @@ class SectionRepository {
 
   Future<void> deleteForever(TrashItem t) => _db.from(t.table).delete().eq('id', t.id);
 
+  // ---------------- تفاصيل الطلب ----------------
+  Future<RequestDetail> requestDetail(String id) async {
+    final row = await _db.from('requests').select(RequestDetail.select).eq('id', id).single();
+    return RequestDetail.fromMap(row);
+  }
+
+  Future<List<RequestItem>> clientRequests(String clientId) async {
+    final rows = await _db
+        .from('requests')
+        .select(RequestItem.select)
+        .eq('client_id', clientId)
+        .isFilter('deleted_at', null)
+        .order('received_at', ascending: false);
+    return rows.map(RequestItem.fromMap).toList();
+  }
+
+  Future<void> updateRequest(String id, Map<String, dynamic> changes) =>
+      _db.from('requests').update(changes).eq('id', id);
+
+  Future<void> setStepDone(String id, bool done) =>
+      _db.from('request_steps').update({'is_done': done}).eq('id', id);
+
+  Future<void> addStep(String requestId, String title, int order) =>
+      _db.from('request_steps').insert({'request_id': requestId, 'title': title, 'sort_order': order});
+
+  Future<void> renameStep(String id, String title) =>
+      _db.from('request_steps').update({'title': title}).eq('id', id);
+
+  Future<void> deleteStep(String id) => _db.from('request_steps').delete().eq('id', id);
+
   // ---------------- التقارير ----------------
   Future<ReportSummary> report(DateTime from, DateTime to) async {
     final res = await _db.rpc('report_summary', params: {'p_from': _isoDate(from), 'p_to': _isoDate(to)});
@@ -428,6 +458,13 @@ final reportProvider = FutureProvider.family<ReportSummary, (DateTime, DateTime)
   (ref, p) => ref.watch(sectionRepoProvider).report(p.$1, p.$2),
 );
 
+final requestDetailProvider = FutureProvider.family<RequestDetail, String>(
+  (ref, id) => ref.watch(sectionRepoProvider).requestDetail(id),
+);
+final clientRequestsProvider = FutureProvider.family<List<RequestItem>, String>(
+  (ref, id) => ref.watch(sectionRepoProvider).clientRequests(id),
+);
+
 /// تحديث كل بيانات المرحلة الثانية مع بيانات المرحلة الأولى.
 void refreshSections(WidgetRef ref) {
   refreshAll(ref);
@@ -449,4 +486,6 @@ void refreshSections(WidgetRef ref) {
   ref.invalidate(manageRowsProvider);
   ref.invalidate(trashProvider);
   ref.invalidate(reportProvider);
+  ref.invalidate(requestDetailProvider);
+  ref.invalidate(clientRequestsProvider);
 }
