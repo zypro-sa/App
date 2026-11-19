@@ -417,6 +417,16 @@ class SectionRepository {
   Future<void> updateRequest(String id, Map<String, dynamic> changes) =>
       _db.from('requests').update(changes).eq('id', id);
 
+  Future<List<Invoice>> requestInvoices(String requestId) async {
+    final rows = await _db
+        .from('invoices')
+        .select(Invoice.select)
+        .eq('request_id', requestId)
+        .isFilter('deleted_at', null)
+        .order('issue_date', ascending: true);
+    return rows.map(Invoice.fromMap).toList();
+  }
+
   Future<void> setStepDone(String id, bool done) =>
       _db.from('request_steps').update({'is_done': done}).eq('id', id);
 
@@ -490,6 +500,9 @@ final reportProvider = FutureProvider.family<ReportSummary, (DateTime, DateTime)
 final requestDetailProvider = FutureProvider.family<RequestDetail, String>(
   (ref, id) => ref.watch(sectionRepoProvider).requestDetail(id),
 );
+final requestInvoicesProvider = FutureProvider.family<List<Invoice>, String>(
+  (ref, id) => ref.watch(sectionRepoProvider).requestInvoices(id),
+);
 final clientRequestsProvider = FutureProvider.family<List<RequestItem>, String>(
   (ref, id) => ref.watch(sectionRepoProvider).clientRequests(id),
 );
@@ -517,4 +530,5 @@ void refreshSections(WidgetRef ref) {
   ref.invalidate(reportProvider);
   ref.invalidate(requestDetailProvider);
   ref.invalidate(clientRequestsProvider);
+  ref.invalidate(requestInvoicesProvider);
 }

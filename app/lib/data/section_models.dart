@@ -135,8 +135,10 @@ class Invoice {
     this.notes,
     this.payments = const [],
     this.returns = const [],
+    this.requestId,
   });
 
+  final String? requestId;
   final String? clientId;
   final String? notes;
   final List<PaymentEntry> payments;
@@ -162,7 +164,7 @@ class Invoice {
   }
 
   static const select =
-      'id, number, total, issue_date, due_date, status, notes, client_id, client:clients(name), '
+      'id, number, total, issue_date, due_date, status, notes, client_id, request_id, client:clients(name), '
       'payments(id, amount, paid_at, deleted_at), invoice_returns(id, amount, returned_at, reason, deleted_at)';
 
   factory Invoice.fromMap(Map<String, dynamic> m) {
@@ -188,6 +190,7 @@ class Invoice {
       notes: m['notes'] as String?,
       payments: entries,
       returns: rets,
+      requestId: m['request_id'] as String?,
     );
   }
 }
