@@ -153,6 +153,14 @@ class SectionRepository {
 
   Future<void> deletePayment(String id) => _db.from('payments').delete().eq('id', id);
 
+  Future<void> addReturn(String invoiceId, num amount, String? reason) => _db.from('invoice_returns').insert({
+        'invoice_id': invoiceId,
+        'amount': amount,
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+      });
+
+  Future<void> deleteReturn(String id) => _db.from('invoice_returns').delete().eq('id', id);
+
   Future<void> updateQuote(String id, Map<String, dynamic> changes) =>
       _db.from('quotes').update(changes).eq('id', id);
 

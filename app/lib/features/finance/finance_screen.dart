@@ -238,7 +238,7 @@ class _InvoiceList extends ConsumerWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(moneyShort(list[i].total), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                        Text(moneyShort(list[i].net), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 4),
                         _pill(list[i]),
                       ],
@@ -255,8 +255,9 @@ class _InvoiceList extends ConsumerWidget {
 
   String _subtitle(Invoice i) {
     if (i.isVoid) return 'ملغاة · لا تُحسب في المستحق';
-    if (i.status == InvoiceStatus.paid) return 'مدفوعة بالكامل';
     final parts = <String>[];
+    if (i.returned > 0) parts.add('مرتجع ${moneyShort(i.returned)}');
+    if (i.status == InvoiceStatus.paid) return [...parts, 'مدفوعة بالكامل'].join(' · ');
     if (i.paid > 0) parts.add('دُفع ${moneyShort(i.paid)} · المتبقي ${moneyShort(i.remaining)}');
     if (i.isOverdue) {
       parts.add('متأخرة ${DateTime.now().difference(i.dueDate).inDays} يومًا');
@@ -496,7 +497,7 @@ class InvoiceSheet extends ConsumerWidget {
                 },
               ),
               FormRow(
-                label: 'الإجمالي شامل الضريبة',
+                label: inv.returned > 0 ? 'الإجمالي قبل المرتجع' : 'الإجمالي شامل الضريبة',
                 value: money(inv.total),
                 onTap: () async {
                   final v = await promptNumber(context, 'الإجمالي', label: 'بالريال', initial: inv.total);
@@ -529,6 +530,84 @@ class InvoiceSheet extends ConsumerWidget {
                 },
               ),
             ]),
+            if (inv.returned > 0) ...[
+              const SizedBox(height: 10),
+              Text('الصافي بعد المرتجع: ${money(inv.net)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('المرتجعات', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
+                if (!inv.isVoid && inv.net > 0)
+                  TextButton.icon(
+                    onPressed: () async {
+                      final amount = await promptNumber(context, 'مرتجع جزئي على ${inv.number}',
+                          label: 'المبلغ (الصافي الحالي ${moneyShort(inv.net)})');
+                      if (amount == null || amount <= 0 || !context.mounted) return;
+                      if (amount > inv.net) {
+                        showSnack(context, 'المرتجع أكبر من صافي الفاتورة. للمرتجع الكامل استخدم «إلغاء الفاتورة»');
+                        return;
+                      }
+                      final reason = await promptText(context, 'سبب المرتجع (اختياري)', confirmLabel: 'تسجيل');
+                      if (!context.mounted) return;
+                      if (await runAction(context, () => repo.addReturn(inv.id, amount, reason), success: 'سُجّل المرتجع')) {
+                        refreshSections(ref);
+                      }
+                    },
+                    icon: const Icon(Icons.undo, size: 18),
+                    label: const Text('مرتجع'),
+                  ),
+              ],
+            ),
+            if (inv.returns.isEmpty)
+              const Text('لا توجد مرتجعات', style: TextStyle(color: AppColors.muted, fontSize: 13))
+            else
+              CardBox(
+                radius: 14,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < inv.returns.length; i++) ...[
+                      if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('${money(inv.returns[i].amount)} · ${formatShortDate(inv.returns[i].date)}',
+                                      style: const TextStyle(fontSize: 14)),
+                                  if (inv.returns[i].reason != null)
+                                    Text(inv.returns[i].reason!, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                                ],
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'حذف المرتجع',
+                            icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.urgent),
+                            onPressed: () async {
+                              final ok = await confirmAction(context,
+                                  title: 'حذف المرتجع؟',
+                                  message: 'مرتجع ${money(inv.returns[i].amount)} سيُحذف ويعود صافي الفاتورة.',
+                                  confirmLabel: 'حذف',
+                                  destructive: true);
+                              if (!ok || !context.mounted) return;
+                              if (await runAction(context, () => repo.deleteReturn(inv.returns[i].id), success: 'حُذف المرتجع')) {
+                                refreshSections(ref);
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             const SizedBox(height: 16),
             Row(
               children: [

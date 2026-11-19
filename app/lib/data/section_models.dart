@@ -134,11 +134,15 @@ class Invoice {
     this.clientId,
     this.notes,
     this.payments = const [],
+    this.returns = const [],
   });
 
   final String? clientId;
   final String? notes;
   final List<PaymentEntry> payments;
+  final List<ReturnEntry> returns;
+  num get returned => returns.fold<num>(0, (a, r) => a + r.amount);
+  num get net => total - returned;
   bool get isVoid => status == InvoiceStatus.voided;
 
   final String id;
@@ -150,7 +154,7 @@ class Invoice {
   final InvoiceStatus status;
   final String? clientName;
 
-  num get remaining => (total - paid) < 0 ? 0 : total - paid;
+  num get remaining => (net - paid) < 0 ? 0 : net - paid;
   bool get isOpen => status != InvoiceStatus.paid && status != InvoiceStatus.voided;
   bool get isOverdue {
     final n = DateTime.now();
@@ -159,7 +163,7 @@ class Invoice {
 
   static const select =
       'id, number, total, issue_date, due_date, status, notes, client_id, client:clients(name), '
-      'payments(id, amount, paid_at, deleted_at)';
+      'payments(id, amount, paid_at, deleted_at), invoice_returns(id, amount, returned_at, reason, deleted_at)';
 
   factory Invoice.fromMap(Map<String, dynamic> m) {
     final pays = ((m['payments'] ?? []) as List).where((p) => p['deleted_at'] == null).toList();
@@ -167,6 +171,10 @@ class Invoice {
         .map((p) => PaymentEntry(p['id'] as String, _num(p['amount']), _d(p['paid_at'])!))
         .toList()
       ..sort((a, b) => a.paidAt.compareTo(b.paidAt));
+    final rets = ((m['invoice_returns'] ?? []) as List)
+        .where((r) => r['deleted_at'] == null)
+        .map((r) => ReturnEntry(r['id'] as String, _num(r['amount']), _d(r['returned_at'])!, r['reason'] as String?))
+        .toList();
     return Invoice(
       id: m['id'] as String,
       number: m['number'] as String,
@@ -179,8 +187,17 @@ class Invoice {
       clientId: m['client_id'] as String?,
       notes: m['notes'] as String?,
       payments: entries,
+      returns: rets,
     );
   }
+}
+
+class ReturnEntry {
+  ReturnEntry(this.id, this.amount, this.date, this.reason);
+  final String id;
+  final num amount;
+  final DateTime date;
+  final String? reason;
 }
 
 class PaymentEntry {
