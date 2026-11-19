@@ -92,6 +92,7 @@ class TeamScreen extends ConsumerWidget {
                         CardBox(
                           radius: 16,
                           borderColor: const Color(0xFFC5CAD3),
+                          onTap: isOwner ? () => context.go('/more/team/${m.id}') : null,
                           child: Row(
                             children: [
                               Expanded(
@@ -100,7 +101,8 @@ class TeamScreen extends ConsumerWidget {
                                   children: [
                                     Text(m.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                                     Text(m.email, textDirection: TextDirection.ltr, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
-                                    Text(m.role.label, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                                    Text(isOwner ? '${m.role.label} · اضغط لتحديد الصلاحيات' : m.role.label,
+                                        style: const TextStyle(fontSize: 12, color: AppColors.muted)),
                                   ],
                                 ),
                               ),
