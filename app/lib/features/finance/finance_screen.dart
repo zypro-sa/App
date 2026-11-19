@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../../core/formatters.dart';
 import '../../core/permissions.dart';
-import '../../core/permissions.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
