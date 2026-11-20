@@ -42,11 +42,19 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
         subtitle: tr('{0} مشاريع جارية{1}', [active, soon > 0 ? tr(' · {0} يقترب موعده', [soon]) : '']),
         actions: [
           if (canCreate)
-            IconButton.filled(
-              tooltip: tr('مشروع جديد'),
-              onPressed: () => showFormSheet(context, const NewProjectSheet()),
-              icon: const Icon(Icons.add),
-              style: IconButton.styleFrom(backgroundColor: AppColors.inkBlock, foregroundColor: AppColors.onInkBlock),
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 12),
+              child: FilledButton.icon(
+                onPressed: () => showFormSheet(context, const NewProjectSheet()),
+                icon: const Icon(Icons.add, size: 18),
+                label: Text(tr('مشروع جديد')),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.onAccent,
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
+              ),
             ),
         ],
       ),
