@@ -11,6 +11,7 @@ import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/forms.dart';
 import '../tasks/tasks_screen.dart' show TaskRow;
+import '../../core/i18n.dart';
 
 /// ١٠ · تفاصيل المشروع
 class ProjectDetailScreen extends ConsumerStatefulWidget {
@@ -31,36 +32,36 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('تفاصيل المشروع'),
+        title: Text(tr('تفاصيل المشروع')),
         centerTitle: true,
         actions: [
           if (canManage)
             PopupMenuButton<String>(
-              tooltip: 'خيارات',
+              tooltip: tr('خيارات'),
               onSelected: (v) async {
                 final repo = ref.read(sectionRepoProvider);
                 if (v == 'delete') {
                   final ok = await confirmAction(context,
-                      title: 'حذف المشروع؟',
-                      message: 'ينتقل إلى سلة المحذوفات ويمكن استرجاعه خلال ٣٠ يومًا.',
-                      confirmLabel: 'حذف',
+                      title: tr('حذف المشروع؟'),
+                      message: tr('ينتقل إلى سلة المحذوفات ويمكن استرجاعه خلال ٣٠ يومًا.'),
+                      confirmLabel: tr('حذف'),
                       destructive: true);
                   if (!ok || !context.mounted) return;
-                  if (await runAction(context, () => repo.softDelete('projects', [widget.projectId]), success: 'نُقل إلى السلة')) {
+                  if (await runAction(context, () => repo.softDelete('projects', [widget.projectId]), success: tr('نُقل إلى السلة'))) {
                     refreshSections(ref);
                     if (context.mounted) Navigator.of(context).maybePop();
                   }
                 } else {
                   final s = ProjectStatus.from(v);
-                  if (await runAction(context, () => repo.setProjectStatus(widget.projectId, s), success: 'تم تغيير الحالة')) {
+                  if (await runAction(context, () => repo.setProjectStatus(widget.projectId, s), success: tr('تم تغيير الحالة'))) {
                     refreshSections(ref);
                   }
                 }
               },
               itemBuilder: (_) => [
-                for (final s in ProjectStatus.values) PopupMenuItem(value: s.db, child: Text('تغيير الحالة: ${s.label}')),
+                for (final s in ProjectStatus.values) PopupMenuItem(value: s.db, child: Text(tr('تغيير الحالة: {0}', [s.label]))),
                 const PopupMenuDivider(),
-                const PopupMenuItem(value: 'delete', child: Text('حذف المشروع', style: TextStyle(color: AppColors.urgent))),
+                PopupMenuItem(value: 'delete', child: Text(tr('حذف المشروع'), style: TextStyle(color: AppColors.urgent))),
               ],
             ),
         ],
@@ -78,10 +79,10 @@ class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
             const SizedBox(height: 14),
             SegmentedButton<int>(
               showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: 0, label: Text('المراحل')),
-                ButtonSegment(value: 1, label: Text('المهام')),
-                ButtonSegment(value: 2, label: Text('الطلبات')),
+              segments: [
+                ButtonSegment(value: 0, label: Text(tr('المراحل'))),
+                ButtonSegment(value: 1, label: Text(tr('المهام'))),
+                ButtonSegment(value: 2, label: Text(tr('الطلبات'))),
               ],
               selected: {_tab},
               onSelectionChanged: (s) => setState(() => _tab = s.first),
@@ -123,8 +124,8 @@ class _Header extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      [p.clientName, if (p.managerName != null) 'مدير المشروع: ${p.managerName}'].whereType<String>().join(' · '),
-                      style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                      [p.clientName, if (p.managerName != null) tr('مدير المشروع: {0}', [p.managerName])].whereType<String>().join(' · '),
+                      style: TextStyle(fontSize: 12, color: AppColors.muted),
                     ),
                   ),
                   statusPill(sl?.label ?? p.status.label, sl?.color ?? 'neutral'),
@@ -137,7 +138,7 @@ class _Header extends ConsumerWidget {
                 children: [
                   Expanded(child: ProgressLine(p.progress, height: 10)),
                   const SizedBox(width: 10),
-                  Text('${p.progress}٪', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  Text(tr('{0}٪', [p.progress]), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                 ],
               ),
             ],
@@ -146,17 +147,17 @@ class _Header extends ConsumerWidget {
         const SizedBox(height: 10),
         Row(
           children: [
-            Expanded(child: _Metric(p.contractValue == null ? '—' : moneyShort(p.contractValue!), 'قيمة العقد')),
+            Expanded(child: _Metric(p.contractValue == null ? '—' : moneyShort(p.contractValue!), tr('قيمة العقد'))),
             const SizedBox(width: 8),
             Expanded(
               child: _Metric(
-                days == null ? '—' : (days < 0 ? 'متأخر ${-days}' : '$days يومًا'),
-                days != null && days < 0 ? 'عن التسليم' : 'على التسليم',
+                days == null ? '—' : (days < 0 ? tr('متأخر {0}', [-days]) : tr('{0} يومًا', [days])),
+                days != null && days < 0 ? tr('عن التسليم') : tr('على التسليم'),
                 warn: days != null && days <= 7,
               ),
             ),
             const SizedBox(width: 8),
-            Expanded(child: _Metric(openTasks?.toString() ?? '…', 'مهام مفتوحة')),
+            Expanded(child: _Metric(openTasks?.toString() ?? '…', tr('مهام مفتوحة'))),
           ],
         ),
       ],
@@ -204,7 +205,7 @@ class _Milestones extends ConsumerWidget {
         AsyncBody<List<Milestone>>(
           value: ms,
           builder: (list) {
-            if (list.isEmpty) return const EmptyState('أضف مراحل المشروع لتُحسب نسبة الإنجاز تلقائيًا', icon: Icons.flag_outlined);
+            if (list.isEmpty) return EmptyState(tr('أضف مراحل المشروع لتُحسب نسبة الإنجاز تلقائيًا'), icon: Icons.flag_outlined);
             final firstOpen = list.indexWhere((m) => !m.isDone);
             return CardBox(
               radius: 16,
@@ -212,7 +213,7 @@ class _Milestones extends ConsumerWidget {
               child: Column(
                 children: [
                   for (var i = 0; i < list.length; i++) ...[
-                    if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                    if (i > 0) Divider(height: 1, color: AppColors.divider),
                     ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                       leading: TaskCheck(
@@ -251,16 +252,16 @@ class _Milestones extends ConsumerWidget {
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () async {
-              final title = await promptText(context, 'مرحلة جديدة', label: 'اسم المرحلة', confirmLabel: 'التالي');
+              final title = await promptText(context, tr('مرحلة جديدة'), label: tr('اسم المرحلة'), confirmLabel: tr('التالي'));
               if (title == null || !context.mounted) return;
               final due = await pickDate(context);
               if (!context.mounted) return;
-              if (await runAction(context, () => repo.addMilestone(projectId, title, due), success: 'أُضيفت المرحلة')) {
+              if (await runAction(context, () => repo.addMilestone(projectId, title, due), success: tr('أُضيفت المرحلة'))) {
                 refreshSections(ref);
               }
             },
             icon: const Icon(Icons.add),
-            label: const Text('إضافة مرحلة'),
+            label: Text(tr('إضافة مرحلة')),
           ),
         ],
       ],
@@ -277,14 +278,14 @@ class _Tasks extends ConsumerWidget {
     return AsyncBody<List<TaskItem>>(
       value: ref.watch(projectTasksProvider(projectId)),
       builder: (list) => list.isEmpty
-          ? const EmptyState('لا توجد مهام مرتبطة بهذا المشروع', icon: Icons.check_box_outlined)
+          ? EmptyState(tr('لا توجد مهام مرتبطة بهذا المشروع'), icon: Icons.check_box_outlined)
           : CardBox(
               radius: 16,
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Column(
                 children: [
                   for (var i = 0; i < list.length; i++) ...[
-                    if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                    if (i > 0) Divider(height: 1, color: AppColors.divider),
                     TaskRow(task: list[i], showAssignee: true),
                   ],
                 ],
@@ -303,7 +304,7 @@ class _Requests extends ConsumerWidget {
     return AsyncBody<List<RequestItem>>(
       value: ref.watch(projectRequestsProvider(projectId)),
       builder: (list) => list.isEmpty
-          ? const EmptyState('لا توجد طلبات مرتبطة بهذا المشروع')
+          ? EmptyState(tr('لا توجد طلبات مرتبطة بهذا المشروع'))
           : Column(
               children: [
                 for (final r in list) ...[
@@ -314,7 +315,7 @@ class _Requests extends ConsumerWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('#${r.number}', style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                              Text('#${r.number}', style: TextStyle(fontSize: 12, color: AppColors.muted)),
                               Text(r.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                             ],
                           ),

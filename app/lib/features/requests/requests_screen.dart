@@ -10,6 +10,7 @@ import '../../data/section_models.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/forms.dart' show statusPill;
+import '../../core/i18n.dart';
 
 /// ٢ · الطلبات
 class RequestsScreen extends ConsumerStatefulWidget {
@@ -48,10 +49,10 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('الطلبات', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
+            Text(tr('الطلبات'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
             Text(
-              '$total طلبًا مفتوحًا${overdue > 0 ? ' · $overdue متأخر' : ''}',
-              style: const TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w400),
+              tr('{0} طلبًا مفتوحًا{1}', [total, overdue > 0 ? tr(' · {0} متأخر', [overdue]) : '']),
+              style: TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w400),
             ),
           ],
         ),
@@ -70,14 +71,14 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                 itemBuilder: (_, i) {
                   final f = _filters[i];
                   final n = f == null ? total : counts[f];
-                  final label = f == null ? 'الكل' : (labels[f.db]?.label ?? f.label);
+                  final label = f == null ? tr('الكل') : (labels[f.db]?.label ?? f.label);
                   return ChoiceChip(
                     label: Text(n == null ? label : '$label $n'),
                     selected: _filter == f,
                     showCheckmark: false,
-                    selectedColor: AppColors.ink,
+                    selectedColor: AppColors.inkBlock,
                     labelStyle: TextStyle(
-                      color: _filter == f ? Colors.white : AppColors.ink,
+                      color: _filter == f ? AppColors.onInkBlock : AppColors.ink,
                       fontWeight: _filter == f ? FontWeight.w600 : FontWeight.w400,
                     ),
                     onSelected: (_) => setState(() => _filter = f),
@@ -90,7 +91,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
               value: requests,
               onRetry: () => ref.invalidate(requestsProvider(_filter)),
               builder: (list) => list.isEmpty
-                  ? const EmptyState('لا توجد طلبات هنا')
+                  ? EmptyState(tr('لا توجد طلبات هنا'))
                   : Column(
                       children: [
                         for (final r in list) ...[
@@ -125,7 +126,7 @@ class _RequestCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   '#${r.number}${r.clientName != null ? ' · ${r.clientName}' : ''}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                  style: TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
               ),
               (r.isOverdue || label == null) ? Pill.forRequest(r) : statusPill(label!.label, label!.color),
@@ -135,7 +136,7 @@ class _RequestCard extends StatelessWidget {
           Text(r.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           if (r.progress > 0) ...[
             const SizedBox(height: 10),
-            ProgressLine(r.progress, color: r.isOverdue ? const Color(0xFFC2410C) : AppColors.accent),
+            ProgressLine(r.progress, color: r.isOverdue ? AppColors.danger : AppColors.accent),
           ],
           const SizedBox(height: 10),
           Row(
@@ -143,15 +144,15 @@ class _RequestCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   [
-                    if (r.progress > 0) '${label?.label ?? r.status.label} · ${r.progress}٪',
-                    if (r.progress == 0 && r.dueDate != null) 'التسليم ${formatShortDate(r.dueDate!)}',
-                    if (r.priority == Priority.high || r.priority == Priority.urgent) 'أولوية ${r.priority.label}',
+                    if (r.progress > 0) tr('{0} · {1}٪', [label?.label ?? r.status.label, r.progress]),
+                    if (r.progress == 0 && r.dueDate != null) tr('التسليم {0}', [formatShortDate(r.dueDate!)]),
+                    if (r.priority == Priority.high || r.priority == Priority.urgent) tr('أولوية {0}', [r.priority.label]),
                   ].join(' · '),
-                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                  style: TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
               ),
               if (r.assigneeName != null) ...[
-                const Text('المسؤول', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                Text(tr('المسؤول'), style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 const SizedBox(width: 6),
                 Avatar(r.assigneeName!.characters.first),
               ],

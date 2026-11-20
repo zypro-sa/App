@@ -9,6 +9,7 @@ import '../../data/section_models.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/forms.dart';
+import '../../core/i18n.dart';
 
 enum _Period { week, month, quarter }
 
@@ -34,20 +35,20 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 
   String get _prevLabel => switch (_period) {
-        _Period.week => 'عن الأسبوع الماضي',
-        _Period.month => 'عن الشهر الماضي',
-        _Period.quarter => 'عن الربع الماضي',
+        _Period.week => tr('عن الأسبوع الماضي'),
+        _Period.month => tr('عن الشهر الماضي'),
+        _Period.quarter => tr('عن الربع الماضي'),
       };
 
   @override
   Widget build(BuildContext context) {
     final me = ref.watch(profileProvider).valueOrNull;
     if (me != null && !me.can(Permissions.reportsView)) {
-      return Scaffold(appBar: sectionAppBar('التقارير'), body: const EmptyState('ليست لديك صلاحية التقارير', icon: Icons.lock_outline));
+      return Scaffold(appBar: sectionAppBar(tr('التقارير')), body: EmptyState(tr('ليست لديك صلاحية التقارير'), icon: Icons.lock_outline));
     }
     final report = ref.watch(reportProvider(_range));
     return Scaffold(
-      appBar: sectionAppBar('التقارير'),
+      appBar: sectionAppBar(tr('التقارير')),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(reportProvider),
         child: ListView(
@@ -55,10 +56,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           children: [
             SegmentedButton<_Period>(
               showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: _Period.week, label: Text('الأسبوع')),
-                ButtonSegment(value: _Period.month, label: Text('الشهر')),
-                ButtonSegment(value: _Period.quarter, label: Text('الربع')),
+              segments: [
+                ButtonSegment(value: _Period.week, label: Text(tr('الأسبوع'))),
+                ButtonSegment(value: _Period.month, label: Text(tr('الشهر'))),
+                ButtonSegment(value: _Period.quarter, label: Text(tr('الربع'))),
               ],
               selected: {_period},
               onSelectionChanged: (s) => setState(() => _period = s.first),
@@ -96,15 +97,15 @@ class _Body extends StatelessWidget {
           childAspectRatio: 1.55,
           children: [
             _Kpi(
-              'طلبات مُغلقة',
+              tr('طلبات مُغلقة'),
               '${r.closedRequests}',
-              change == null ? null : '${change >= 0 ? '▲' : '▼'} ${change.abs()}٪ $prevLabel',
+              change == null ? null : tr('{0} {1}٪ {2}', [change >= 0 ? '▲' : '▼', change.abs(), prevLabel]),
               good: change == null ? null : change >= 0,
             ),
-            _Kpi('متوسط زمن الإنجاز', r.avgDays == null ? '—' : '${r.avgDays} يوم', null),
-            _Kpi('الالتزام بالمواعيد', r.onTimePct == null ? '—' : '${r.onTimePct}٪', null,
+            _Kpi(tr('متوسط زمن الإنجاز'), r.avgDays == null ? '—' : tr('{0} يوم', [r.avgDays]), null),
+            _Kpi(tr('الالتزام بالمواعيد'), r.onTimePct == null ? '—' : tr('{0}٪', [r.onTimePct]), null,
                 good: r.onTimePct == null ? null : r.onTimePct! >= 80),
-            _Kpi('مهام منجزة', '${r.tasksDone}', r.tasksTotal > 0 ? 'من ${r.tasksTotal} مهمة' : null),
+            _Kpi(tr('مهام منجزة'), '${r.tasksDone}', r.tasksTotal > 0 ? tr('من {0} مهمة', [r.tasksTotal]) : null),
           ],
         ),
         const SizedBox(height: 14),
@@ -112,10 +113,10 @@ class _Body extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('الطلبات المُغلقة أسبوعيًا', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              Text(tr('الطلبات المُغلقة أسبوعيًا'), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
               if (r.weekly.isEmpty)
-                const Text('لا توجد طلبات مُغلقة في هذه الفترة', style: TextStyle(color: AppColors.muted, fontSize: 13))
+                Text(tr('لا توجد طلبات مُغلقة في هذه الفترة'), style: TextStyle(color: AppColors.muted, fontSize: 13))
               else
                 _WeeklyBars(r.weekly),
             ],
@@ -126,10 +127,10 @@ class _Body extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('أداء الفريق · الالتزام بالمواعيد', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              Text(tr('أداء الفريق · الالتزام بالمواعيد'), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
               if (r.team.isEmpty)
-                const Text('لا توجد مهام منجزة في هذه الفترة', style: TextStyle(color: AppColors.muted, fontSize: 13))
+                Text(tr('لا توجد مهام منجزة في هذه الفترة'), style: TextStyle(color: AppColors.muted, fontSize: 13))
               else
                 for (final t in r.team)
                   Padding(
@@ -145,13 +146,13 @@ class _Body extends StatelessWidget {
                                 ? AppColors.done
                                 : (t.$3 ?? 0) >= 75
                                     ? const Color(0xFF8FE3C6)
-                                    : const Color(0xFFC2410C),
+                                    : AppColors.danger,
                           ),
                         ),
                         const SizedBox(width: 8),
                         SizedBox(
                           width: 70,
-                          child: Text('${t.$3 ?? 0}٪ · ${t.$2}',
+                          child: Text(tr('{0}٪ · {1}', [t.$3 ?? 0, t.$2]),
                               textAlign: TextAlign.end, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                         ),
                       ],
@@ -181,7 +182,7 @@ class _Kpi extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+          Text(label, style: TextStyle(fontSize: 12, color: AppColors.muted)),
           FittedBox(fit: BoxFit.scaleDown, child: Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700))),
           if (note != null)
             Text(
@@ -208,7 +209,7 @@ class _WeeklyBars extends StatelessWidget {
   Widget build(BuildContext context) {
     final max = weeks.map((w) => w.$2).fold<int>(1, (a, b) => b > a ? b : a);
     return Semantics(
-      label: 'الطلبات المغلقة أسبوعيًا: ${weeks.map((w) => w.$2).join('، ')}',
+      label: tr('الطلبات المغلقة أسبوعيًا: {0}', [weeks.map((w) => w.$2).join(tr('، '))]),
       child: SizedBox(
         height: 120,
         child: Row(
@@ -231,12 +232,12 @@ class _WeeklyBars extends StatelessWidget {
                       Container(
                         height: 70 * weeks[i].$2 / max + 4,
                         decoration: BoxDecoration(
-                          color: i == weeks.length - 1 ? AppColors.accent : const Color(0xFFC6F0E1),
+                          color: i == weeks.length - 1 ? AppColors.accent : AppColors.barSoft,
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(6), bottom: Radius.circular(2)),
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(formatShortDate(weeks[i].$1), style: const TextStyle(fontSize: 10, color: AppColors.muted)),
+                      Text(formatShortDate(weeks[i].$1), style: TextStyle(fontSize: 10, color: AppColors.muted)),
                     ],
                   ),
                 ),

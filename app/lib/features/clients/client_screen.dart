@@ -9,6 +9,7 @@ import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
+import '../../core/i18n.dart';
 
 /// ٥ · ملف العميل
 class ClientScreen extends ConsumerWidget {
@@ -20,7 +21,7 @@ class ClientScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(clientDetailProvider(clientId));
     return Scaffold(
-      appBar: AppBar(title: const Text('ملف العميل'), centerTitle: true),
+      appBar: AppBar(title: Text(tr('ملف العميل')), centerTitle: true),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(clientDetailProvider(clientId)),
         child: ListView(
@@ -38,7 +39,7 @@ class ClientScreen extends ConsumerWidget {
   }
 }
 
-final _money = NumberFormat.decimalPattern('ar');
+NumberFormat get _money => NumberFormat.decimalPattern(L.code);
 
 class _ClientBody extends StatelessWidget {
   const _ClientBody(this.d);
@@ -60,18 +61,18 @@ class _ClientBody extends StatelessWidget {
               Text(d.client.name, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700), textAlign: TextAlign.center),
               if (contact != null)
                 Text(
-                  'جهة التواصل: ${contact.name}${contact.position != null ? ' · ${contact.position}' : ''}',
-                  style: const TextStyle(fontSize: 13, color: AppColors.muted),
+                  tr('جهة التواصل: {0}{1}', [contact.name, contact.position != null ? ' · ${contact.position}' : '']),
+                  style: TextStyle(fontSize: 13, color: AppColors.muted),
                   textAlign: TextAlign.center,
                 ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(child: _Action(icon: Icons.call_outlined, label: 'اتصال', enabled: contact?.phone != null)),
+                  Expanded(child: _Action(icon: Icons.call_outlined, label: tr('اتصال'), enabled: contact?.phone != null)),
                   const SizedBox(width: 8),
-                  Expanded(child: _Action(icon: Icons.mail_outline, label: 'بريد', enabled: contact?.email != null)),
+                  Expanded(child: _Action(icon: Icons.mail_outline, label: tr('بريد'), enabled: contact?.email != null)),
                   const SizedBox(width: 8),
-                  const Expanded(child: _Action(icon: Icons.event_outlined, label: 'موعد', enabled: true)),
+                  Expanded(child: _Action(icon: Icons.event_outlined, label: tr('موعد'), enabled: true)),
                 ],
               ),
             ],
@@ -80,14 +81,14 @@ class _ClientBody extends StatelessWidget {
         const SizedBox(height: 14),
         Row(
           children: [
-            Expanded(child: _Metric(value: '${d.openRequests}', label: 'طلبات مفتوحة')),
+            Expanded(child: _Metric(value: '${d.openRequests}', label: tr('طلبات مفتوحة'))),
             const SizedBox(width: 8),
-            Expanded(child: _Metric(value: _money.format(d.contractsValue), label: 'قيمة العقود')),
+            Expanded(child: _Metric(value: _money.format(d.contractsValue), label: tr('قيمة العقود'))),
             const SizedBox(width: 8),
             Expanded(
               child: _Metric(
                 value: _money.format(d.amountDue),
-                label: 'مستحق الدفع',
+                label: tr('مستحق الدفع'),
                 warn: d.amountDue > 0,
               ),
             ),
@@ -96,9 +97,9 @@ class _ClientBody extends StatelessWidget {
         const SizedBox(height: 18),
         _ClientRequests(clientId: d.client.id),
         const SizedBox(height: 18),
-        const SectionHeader('السجل'),
+        SectionHeader(tr('السجل')),
         if (d.activity.isEmpty)
-          const EmptyState('لا يوجد نشاط مسجّل بعد', icon: Icons.history)
+          EmptyState(tr('لا يوجد نشاط مسجّل بعد'), icon: Icons.history)
         else
           for (var i = 0; i < d.activity.length; i++)
             _TimelineEntry(entry: d.activity[i], first: i == 0, last: i == d.activity.length - 1),
@@ -144,7 +145,7 @@ class _Metric extends StatelessWidget {
       radius: 14,
       padding: const EdgeInsets.all(12),
       color: warn ? AppColors.waitingSoft : AppColors.surface,
-      borderColor: warn ? const Color(0xFFF2DFA6) : AppColors.line,
+      borderColor: warn ? AppColors.warnBorder : AppColors.line,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -179,7 +180,7 @@ class _TimelineEntry extends StatelessWidget {
                 width: 12,
                 height: 12,
                 decoration: BoxDecoration(
-                  color: first ? AppColors.primary : const Color(0xFF9AA2AE),
+                  color: first ? AppColors.primary : AppColors.faint,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -195,7 +196,7 @@ class _TimelineEntry extends StatelessWidget {
                 children: [
                   Text(entry.action, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   Text('${relativeDay(entry.at)} · ${formatTime(entry.at)}',
-                      style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                      style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 ],
               ),
             ),
@@ -220,19 +221,19 @@ class _ClientRequests extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SectionHeader('الطلبات${list.isEmpty ? '' : ' · ${open.length} مفتوح'}'),
+        SectionHeader(tr('الطلبات{0}', [list.isEmpty ? '' : tr(' · {0} مفتوح', [open.length])])),
         AsyncBody<List<RequestItem>>(
           value: requests,
           onRetry: () => ref.invalidate(clientRequestsProvider(clientId)),
           builder: (_) => list.isEmpty
-              ? const CardBox(child: Text('لا توجد طلبات لهذا العميل', style: TextStyle(color: AppColors.muted)))
+              ? CardBox(child: Text(tr('لا توجد طلبات لهذا العميل'), style: TextStyle(color: AppColors.muted)))
               : CardBox(
                   radius: 16,
                   padding: EdgeInsets.zero,
                   child: Column(
                     children: [
                       for (var i = 0; i < [...open, ...closed].length; i++) ...[
-                        if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                        if (i > 0) Divider(height: 1, color: AppColors.divider),
                         _row(context, [...open, ...closed][i]),
                       ],
                     ],
@@ -271,9 +272,9 @@ class _ClientRequests extends ConsumerWidget {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Expanded(child: ProgressLine(r.progress, color: r.isOverdue ? const Color(0xFFC2410C) : AppColors.accent)),
+                  Expanded(child: ProgressLine(r.progress, color: r.isOverdue ? AppColors.danger : AppColors.accent)),
                   const SizedBox(width: 8),
-                  Text('${r.progress}٪', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  Text(tr('{0}٪', [r.progress]), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                 ],
               ),
             ],

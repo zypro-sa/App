@@ -10,6 +10,7 @@ import '../../data/section_models.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/forms.dart';
+import '../../core/i18n.dart';
 
 /// ٢١ · سلة المحذوفات
 class TrashScreen extends ConsumerWidget {
@@ -24,7 +25,7 @@ class TrashScreen extends ConsumerWidget {
     final repo = ref.read(sectionRepoProvider);
 
     return Scaffold(
-      appBar: sectionAppBar('سلة المحذوفات', subtitle: 'تُحذف نهائيًا بعد ٣٠ يومًا'),
+      appBar: sectionAppBar(tr('سلة المحذوفات'), subtitle: tr('تُحذف نهائيًا بعد ٣٠ يومًا')),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(trashProvider),
         child: ListView(
@@ -33,12 +34,12 @@ class TrashScreen extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(14)),
-              child: const Row(
+              child: Row(
                 children: [
                   Icon(Icons.restore, size: 18, color: AppColors.accentText),
                   SizedBox(width: 10),
                   Expanded(
-                    child: Text('الاسترجاع يعيد العنصر بكل بياناته وارتباطاته',
+                    child: Text(tr('الاسترجاع يعيد العنصر بكل بياناته وارتباطاته'),
                         style: TextStyle(fontSize: 13, color: AppColors.accentText)),
                   ),
                 ],
@@ -49,7 +50,7 @@ class TrashScreen extends ConsumerWidget {
               value: trash,
               onRetry: () => ref.invalidate(trashProvider),
               builder: (list) {
-                if (list.isEmpty) return const EmptyState('السلة فارغة', icon: Icons.delete_outline);
+                if (list.isEmpty) return EmptyState(tr('السلة فارغة'), icon: Icons.delete_outline);
                 final groups = <String, List<TrashItem>>{};
                 for (final t in list) {
                   groups.putIfAbsent(t.entity, () => []).add(t);
@@ -59,7 +60,7 @@ class TrashScreen extends ConsumerWidget {
                   children: [
                     for (final g in groups.entries) ...[
                       Text('${TrashItem.labels[g.key] ?? g.key} · ${g.value.length}',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.subtle)),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.subtle)),
                       const SizedBox(height: 8),
                       CardBox(
                         radius: 16,
@@ -67,7 +68,7 @@ class TrashScreen extends ConsumerWidget {
                         child: Column(
                           children: [
                             for (var i = 0; i < g.value.length; i++) ...[
-                              if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                              if (i > 0) Divider(height: 1, color: AppColors.divider),
                               _TrashRow(item: g.value[i], canPurge: isOwner, canRestore: canRestore),
                             ],
                           ],
@@ -79,15 +80,15 @@ class TrashScreen extends ConsumerWidget {
                       OutlinedButton(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.urgent,
-                          side: const BorderSide(color: AppColors.urgentBorder),
+                          side: BorderSide(color: AppColors.urgentBorder),
                           minimumSize: const Size.fromHeight(46),
                         ),
                         onPressed: () async {
                           final ok = await confirmAction(
                             context,
-                            title: 'إفراغ السلة نهائيًا؟',
-                            message: 'سيُحذف ${list.length} عنصرًا ولا يمكن استرجاعها بعد ذلك.',
-                            confirmLabel: 'حذف نهائي',
+                            title: tr('إفراغ السلة نهائيًا؟'),
+                            message: tr('سيُحذف {0} عنصرًا ولا يمكن استرجاعها بعد ذلك.', [list.length]),
+                            confirmLabel: tr('حذف نهائي'),
                             destructive: true,
                           );
                           if (!ok || !context.mounted) return;
@@ -99,10 +100,10 @@ class TrashScreen extends ConsumerWidget {
                                 // عنصر مرتبط ببيانات أخرى يبقى في السلة
                               }
                             }
-                          }, success: 'أُفرغت السلة');
+                          }, success: tr('أُفرغت السلة'));
                           refreshSections(ref);
                         },
-                        child: const Text('إفراغ السلة نهائيًا'),
+                        child: Text(tr('إفراغ السلة نهائيًا')),
                       ),
                   ],
                 );
@@ -137,9 +138,9 @@ class _TrashRow extends ConsumerWidget {
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 Text(
                   [
-                    if (item.deletedByName != null) 'حذفه ${item.deletedByName}',
+                    if (item.deletedByName != null) tr('حذفه {0}', [item.deletedByName]),
                     relativeDay(item.deletedAt),
-                    days <= 3 ? 'يُحذف نهائيًا بعد ${days < 1 ? 'أقل من يوم' : '$days أيام'}' : 'يبقى $days يومًا',
+                    days <= 3 ? tr('يُحذف نهائيًا بعد {0}', [days < 1 ? tr('أقل من يوم') : tr('{0} أيام', [days])]) : tr('يبقى {0} يومًا', [days]),
                   ].join(' · '),
                   style: TextStyle(
                     fontSize: 12,
@@ -155,29 +156,29 @@ class _TrashRow extends ConsumerWidget {
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(0, 34),
               foregroundColor: AppColors.primary,
-              side: const BorderSide(color: AppColors.primary),
+              side: BorderSide(color: AppColors.primary),
             ),
             onPressed: () async {
-              if (await runAction(context, () => repo.restore(item), success: 'استُرجع العنصر')) {
+              if (await runAction(context, () => repo.restore(item), success: tr('استُرجع العنصر'))) {
                 refreshSections(ref);
               }
             },
-            child: const Text('استرجاع'),
+            child: Text(tr('استرجاع')),
           ),
           if (canPurge)
             IconButton(
-              tooltip: 'حذف نهائي',
-              icon: const Icon(Icons.delete_forever_outlined, color: AppColors.urgent),
+              tooltip: tr('حذف نهائي'),
+              icon: Icon(Icons.delete_forever_outlined, color: AppColors.urgent),
               onPressed: () async {
                 final ok = await confirmAction(
                   context,
-                  title: 'حذف نهائي؟',
-                  message: '«${item.title}» سيُحذف ولا يمكن استرجاعه.',
-                  confirmLabel: 'حذف نهائي',
+                  title: tr('حذف نهائي؟'),
+                  message: tr('«{0}» سيُحذف ولا يمكن استرجاعه.', [item.title]),
+                  confirmLabel: tr('حذف نهائي'),
                   destructive: true,
                 );
                 if (!ok || !context.mounted) return;
-                if (await runAction(context, () => repo.deleteForever(item), success: 'حُذف نهائيًا')) {
+                if (await runAction(context, () => repo.deleteForever(item), success: tr('حُذف نهائيًا'))) {
                   refreshSections(ref);
                 }
               },

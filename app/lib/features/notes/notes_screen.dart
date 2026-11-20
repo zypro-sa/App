@@ -7,6 +7,7 @@ import '../../data/section_models.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/forms.dart';
+import '../../core/i18n.dart';
 
 /// ١٢ · الملاحظات (خاصة بصاحبها)
 class NotesScreen extends ConsumerStatefulWidget {
@@ -29,7 +30,7 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
       context,
       StatefulBuilder(
         builder: (ctx, setSheet) => SheetBody(
-          title: 'ملاحظة جديدة',
+          title: tr('ملاحظة جديدة'),
           onSubmit: () => Navigator.pop(ctx, true),
           children: [
             SegmentedButton<NoteType>(
@@ -44,7 +45,7 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
               autofocus: true,
               minLines: 4,
               maxLines: 10,
-              decoration: const InputDecoration(hintText: 'اكتب فكرتك أو ملاحظة المكالمة'),
+              decoration: InputDecoration(hintText: tr('اكتب فكرتك أو ملاحظة المكالمة')),
             ),
           ],
         ),
@@ -53,7 +54,7 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
     final text = c.text.trim();
     c.dispose();
     if (saved != true || text.isEmpty || !mounted) return;
-    if (await runAction(context, () => ref.read(sectionRepoProvider).createNote(text, type), success: 'حُفظت الملاحظة')) {
+    if (await runAction(context, () => ref.read(sectionRepoProvider).createNote(text, type), success: tr('حُفظت الملاحظة'))) {
       refreshSections(ref);
     }
   }
@@ -62,10 +63,10 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
   Widget build(BuildContext context) {
     final notes = ref.watch(notesProvider);
     return Scaffold(
-      appBar: sectionAppBar('الملاحظات', subtitle: 'خاصة بك · لا يراها غيرك'),
+      appBar: sectionAppBar(tr('الملاحظات'), subtitle: tr('خاصة بك · لا يراها غيرك')),
       floatingActionButton: FloatingActionButton(
         heroTag: 'new-note',
-        tooltip: 'ملاحظة جديدة',
+        tooltip: tr('ملاحظة جديدة'),
         onPressed: _newNote,
         child: const Icon(Icons.edit_note, size: 28),
       ),
@@ -75,7 +76,7 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
           children: [
             TextField(
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'ابحث في ملاحظاتك'),
+              decoration: InputDecoration(prefixIcon: Icon(Icons.search), hintText: tr('ابحث في ملاحظاتك')),
               onChanged: (v) => setState(() => _query = v.trim()),
             ),
             const SizedBox(height: 12),
@@ -84,16 +85,16 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
               children: [
                 for (final f in _Filter.values)
                   ChoiceChip(
-                    label: Text(const {
-                      _Filter.all: 'الكل',
-                      _Filter.idea: 'أفكار',
-                      _Filter.call: 'مكالمات',
-                      _Filter.pinned: 'مثبتة',
+                    label: Text({
+                      _Filter.all: tr('الكل'),
+                      _Filter.idea: tr('أفكار'),
+                      _Filter.call: tr('مكالمات'),
+                      _Filter.pinned: tr('مثبتة'),
                     }[f]!),
                     selected: _filter == f,
                     showCheckmark: false,
-                    selectedColor: AppColors.ink,
-                    labelStyle: TextStyle(color: _filter == f ? Colors.white : AppColors.ink),
+                    selectedColor: AppColors.inkBlock,
+                    labelStyle: TextStyle(color: _filter == f ? AppColors.onInkBlock : AppColors.ink),
                     onSelected: (_) => setState(() => _filter = f),
                   ),
               ],
@@ -112,7 +113,7 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
                     _Filter.pinned => n.pinned,
                   };
                 }).toList();
-                if (list.isEmpty) return const EmptyState('لا توجد ملاحظات', icon: Icons.sticky_note_2_outlined);
+                if (list.isEmpty) return EmptyState(tr('لا توجد ملاحظات'), icon: Icons.sticky_note_2_outlined);
                 return Column(children: [for (final n in list) ...[_NoteCard(n), const SizedBox(height: 10)]]);
               },
             ),
@@ -137,23 +138,23 @@ class _NoteCard extends ConsumerWidget {
     };
     return CardBox(
       color: n.pinned ? AppColors.waitingSoft : AppColors.surface,
-      borderColor: n.pinned ? const Color(0xFFF2DFA6) : AppColors.line,
+      borderColor: n.pinned ? AppColors.warnBorder : AppColors.line,
       padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              if (n.pinned) const Icon(Icons.push_pin, size: 14, color: AppColors.waiting),
+              if (n.pinned) Icon(Icons.push_pin, size: 14, color: AppColors.waiting),
               if (n.pinned) const SizedBox(width: 4),
               Text(
-                '${n.pinned ? 'مثبتة · ' : ''}${n.type.label}',
+                '${n.pinned ? tr('مثبتة · ') : ''}${n.type.label}',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: n.pinned ? AppColors.waiting : typeColor),
               ),
               const Spacer(),
-              Text(relativeDay(n.createdAt), style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+              Text(relativeDay(n.createdAt), style: TextStyle(fontSize: 12, color: AppColors.muted)),
               PopupMenuButton<String>(
-                tooltip: 'خيارات',
+                tooltip: tr('خيارات'),
                 icon: const Icon(Icons.more_vert, size: 20),
                 onSelected: (v) async {
                   Future<void> Function() action;
@@ -161,20 +162,20 @@ class _NoteCard extends ConsumerWidget {
                   switch (v) {
                     case 'pin':
                       action = () => repo.setNotePinned(n.id, !n.pinned);
-                      msg = n.pinned ? 'أُلغي التثبيت' : 'ثُبّتت الملاحظة';
+                      msg = n.pinned ? tr('أُلغي التثبيت') : tr('ثُبّتت الملاحظة');
                     case 'task':
                       action = () => repo.noteToTask(n);
-                      msg = 'تحوّلت إلى مهمة';
+                      msg = tr('تحوّلت إلى مهمة');
                     default:
                       action = () => repo.softDelete('notes', [n.id]);
-                      msg = 'نُقلت إلى السلة';
+                      msg = tr('نُقلت إلى السلة');
                   }
                   if (await runAction(context, action, success: msg)) refreshSections(ref);
                 },
                 itemBuilder: (_) => [
-                  PopupMenuItem(value: 'pin', child: Text(n.pinned ? 'إلغاء التثبيت' : 'تثبيت')),
-                  if (n.convertedTaskId == null) const PopupMenuItem(value: 'task', child: Text('تحويل إلى مهمة')),
-                  const PopupMenuItem(value: 'delete', child: Text('حذف', style: TextStyle(color: AppColors.urgent))),
+                  PopupMenuItem(value: 'pin', child: Text(n.pinned ? tr('إلغاء التثبيت') : tr('تثبيت'))),
+                  if (n.convertedTaskId == null) PopupMenuItem(value: 'task', child: Text(tr('تحويل إلى مهمة'))),
+                  PopupMenuItem(value: 'delete', child: Text(tr('حذف'), style: TextStyle(color: AppColors.urgent))),
                 ],
               ),
             ],
@@ -185,7 +186,7 @@ class _NoteCard extends ConsumerWidget {
           ),
           if (n.convertedTaskId != null) ...[
             const SizedBox(height: 6),
-            Pill.done('تحوّلت إلى مهمة'),
+            Pill.done(tr('تحوّلت إلى مهمة')),
           ],
         ],
       ),

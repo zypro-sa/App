@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/router.dart' show passwordRecovery;
 import '../../core/theme.dart';
 import '../../widgets/common.dart';
+import '../../core/i18n.dart';
+import '../../widgets/display_toggles.dart';
 
 /// تعيين كلمة المرور لعضو دُعي للفريق، أو بعد طلب استعادتها.
 class SetPasswordScreen extends StatefulWidget {
@@ -27,11 +29,11 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
 
   Future<void> _save() async {
     if (_p1.text.length < 8) {
-      showSnack(context, 'كلمة المرور ٨ أحرف على الأقل');
+      showSnack(context, tr('كلمة المرور ٨ أحرف على الأقل'));
       return;
     }
     if (_p1.text != _p2.text) {
-      showSnack(context, 'كلمتا المرور غير متطابقتين');
+      showSnack(context, tr('كلمتا المرور غير متطابقتين'));
       return;
     }
     setState(() => _busy = true);
@@ -58,22 +60,24 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(child: Image.asset('assets/brand/zypro_wordmark.png', width: 170, semanticLabel: 'Zypro')),
+                const Align(alignment: AlignmentDirectional.centerEnd, child: DisplayToggles()),
+                  const SizedBox(height: 8),
+                  Center(child: Image.asset(AppAssets.wordmark, width: 170, semanticLabel: 'Zypro')),
                 const SizedBox(height: 16),
                 Text(
-                  name == null ? 'مرحبًا بك' : 'مرحبًا $name',
+                  name == null ? tr('مرحبًا بك') : tr('مرحبًا {0}', [name]),
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
-                const Text('اختر كلمة مرور لحسابك', textAlign: TextAlign.center, style: TextStyle(color: AppColors.muted)),
+                Text(tr('اختر كلمة مرور لحسابك'), textAlign: TextAlign.center, style: TextStyle(color: AppColors.muted)),
                 const SizedBox(height: 28),
                 TextField(
                   controller: _p1,
                   obscureText: true,
                   textDirection: TextDirection.ltr,
                   autofillHints: const [AutofillHints.newPassword],
-                  decoration: const InputDecoration(labelText: 'كلمة المرور الجديدة'),
+                  decoration: InputDecoration(labelText: tr('كلمة المرور الجديدة')),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -81,14 +85,14 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
                   obscureText: true,
                   textDirection: TextDirection.ltr,
                   onSubmitted: (_) => _save(),
-                  decoration: const InputDecoration(labelText: 'تأكيد كلمة المرور'),
+                  decoration: InputDecoration(labelText: tr('تأكيد كلمة المرور')),
                 ),
                 const SizedBox(height: 24),
                 FilledButton(
                   onPressed: _busy ? null : _save,
                   child: _busy
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('حفظ والدخول'),
+                      : Text(tr('حفظ والدخول')),
                 ),
               ],
             ),

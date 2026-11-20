@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../widgets/common.dart';
+import '../../core/i18n.dart';
 
 /// ٦ · المتابعات
 class FollowupsScreen extends ConsumerStatefulWidget {
@@ -27,11 +28,11 @@ class _FollowupsScreenState extends ConsumerState<FollowupsScreen> {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 72,
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('المتابعات', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
-            Text('حتى لا تضيع أي فرصة أو وعد',
+            Text(tr('المتابعات'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
+            Text(tr('حتى لا تضيع أي فرصة أو وعد'),
                 style: TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w400)),
           ],
         ),
@@ -46,11 +47,11 @@ class _FollowupsScreenState extends ConsumerState<FollowupsScreen> {
               segments: [
                 ButtonSegment(
                   value: FollowupDirection.promised,
-                  label: Text('وعدتُ بها${promised != null ? ' $promised' : ''}'),
+                  label: Text(tr('وعدتُ بها{0}', [promised != null ? ' $promised' : ''])),
                 ),
                 ButtonSegment(
                   value: FollowupDirection.waiting,
-                  label: Text('أنتظرها${waiting != null ? ' $waiting' : ''}'),
+                  label: Text(tr('أنتظرها{0}', [waiting != null ? ' $waiting' : ''])),
                 ),
               ],
               selected: {_direction},
@@ -61,7 +62,7 @@ class _FollowupsScreenState extends ConsumerState<FollowupsScreen> {
               value: items,
               onRetry: () => ref.invalidate(followupsProvider(_direction)),
               builder: (list) => list.isEmpty
-                  ? const EmptyState('لا توجد متابعات مفتوحة', icon: Icons.task_alt)
+                  ? EmptyState(tr('لا توجد متابعات مفتوحة'), icon: Icons.task_alt)
                   : Column(
                       children: [
                         for (var i = 0; i < list.length; i++) ...[
@@ -88,9 +89,9 @@ class _FollowupCard extends ConsumerWidget {
     final today = dateOnly(DateTime.now());
     final due = dateOnly(f.dueAt);
     if (!due.isAfter(today)) {
-      return Pill.urgent(due == today ? 'مستحقة اليوم' : 'متأخرة · ${relativeDay(f.dueAt)}');
+      return Pill.urgent(due == today ? tr('مستحقة اليوم') : tr('متأخرة · {0}', [relativeDay(f.dueAt)]));
     }
-    if (due.difference(today).inDays == 1) return Pill.waiting('غدًا');
+    if (due.difference(today).inDays == 1) return Pill.waiting(tr('غدًا'));
     return Pill.neutral(relativeDay(f.dueAt));
   }
 
@@ -100,7 +101,7 @@ class _FollowupCard extends ConsumerWidget {
       refreshAll(ref);
       if (context.mounted) showSnack(context, done);
     } catch (e) {
-      if (context.mounted) showSnack(context, 'تعذّر التنفيذ: $e');
+      if (context.mounted) showSnack(context, tr('تعذّر التنفيذ: {0}', [e]));
     }
   }
 
@@ -120,10 +121,10 @@ class _FollowupCard extends ConsumerWidget {
               pill,
               const Spacer(),
               if (f.counterpart != null)
-                Text(f.counterpart!, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                Text(f.counterpart!, style: TextStyle(fontSize: 12, color: AppColors.muted)),
               if (f.isAuto) ...[
                 const SizedBox(width: 6),
-                Pill.info('تلقائية'),
+                Pill.info(tr('تلقائية')),
               ],
             ],
           ),
@@ -135,23 +136,23 @@ class _FollowupCard extends ConsumerWidget {
               Expanded(
                 child: FilledButton(
                   style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
-                  onPressed: () => _run(context, ref, () => repo.completeFollowup(f.id), 'تمت المتابعة'),
-                  child: const Text('تم'),
+                  onPressed: () => _run(context, ref, () => repo.completeFollowup(f.id), tr('تمت المتابعة')),
+                  child: Text(tr('تم')),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton(
                   onPressed: () => _run(context, ref,
-                      () => repo.snoozeFollowup(f.id, const Duration(days: 1)), 'أُجّلت إلى الغد'),
-                  child: const Text('تأجيل'),
+                      () => repo.snoozeFollowup(f.id, const Duration(days: 1)), tr('أُجّلت إلى الغد')),
+                  child: Text(tr('تأجيل')),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => _run(context, ref, () => repo.followupToTask(f), 'تحوّلت إلى مهمة'),
-                  child: const Text('إلى مهمة'),
+                  onPressed: () => _run(context, ref, () => repo.followupToTask(f), tr('تحوّلت إلى مهمة')),
+                  child: Text(tr('إلى مهمة')),
                 ),
               ),
             ],

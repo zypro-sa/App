@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../widgets/common.dart';
+import '../../core/i18n.dart';
 
 /// ٣ · المهام
 class TasksScreen extends ConsumerStatefulWidget {
@@ -36,10 +37,10 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('المهام', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
+            Text(tr('المهام'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
             Text(
-              'أنجزت $doneToday من ${todayTasks.length} اليوم',
-              style: const TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w400),
+              tr('أنجزت {0} من {1} اليوم', [doneToday, todayTasks.length]),
+              style: TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w400),
             ),
           ],
         ),
@@ -52,8 +53,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
             SegmentedButton<bool>(
               showSelectedIcon: false,
               segments: [
-                ButtonSegment(value: false, label: Text('مهامي ${_openCount(mine)}')),
-                ButtonSegment(value: true, label: Text('أسندتها للفريق ${_openCount(team)}')),
+                ButtonSegment(value: false, label: Text(tr('مهامي {0}', [_openCount(mine)]))),
+                ButtonSegment(value: true, label: Text(tr('أسندتها للفريق {0}', [_openCount(team)]))),
               ],
               selected: {_assignedByMe},
               onSelectionChanged: (s) => setState(() => _assignedByMe = s.first),
@@ -63,7 +64,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
               children: [
                 Expanded(child: ProgressLine(percent, height: 8)),
                 const SizedBox(width: 10),
-                Text('$percent٪', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.done)),
+                Text(tr('{0}٪', [percent]), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.done)),
               ],
             ),
             const SizedBox(height: 14),
@@ -71,7 +72,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
               value: tasks,
               onRetry: () => ref.invalidate(tasksProvider(_assignedByMe)),
               builder: (list) => list.isEmpty
-                  ? const EmptyState('لا توجد مهام', icon: Icons.check_circle_outline)
+                  ? EmptyState(tr('لا توجد مهام'), icon: Icons.check_circle_outline)
                   : _GroupedTasks(tasks: list, showAssignee: _assignedByMe),
             ),
           ],
@@ -117,22 +118,23 @@ class _GroupedTasks extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _Group('متأخرة', overdue, color: AppColors.urgent, showAssignee: showAssignee),
-        _Group('اليوم', todayList, showAssignee: showAssignee),
-        _Group('هذا الأسبوع', week, showAssignee: showAssignee),
-        _Group('لاحقًا', later, showAssignee: showAssignee),
-        _Group('منجزة مؤخرًا', done, showAssignee: showAssignee),
+        _Group(tr('متأخرة'), overdue, color: AppColors.urgent, showAssignee: showAssignee),
+        _Group(tr('اليوم'), todayList, showAssignee: showAssignee),
+        _Group(tr('هذا الأسبوع'), week, showAssignee: showAssignee),
+        _Group(tr('لاحقًا'), later, showAssignee: showAssignee),
+        _Group(tr('منجزة مؤخرًا'), done, showAssignee: showAssignee),
       ],
     );
   }
 }
 
 class _Group extends StatelessWidget {
-  const _Group(this.title, this.tasks, {this.color = AppColors.subtle, required this.showAssignee});
+  const _Group(this.title, this.tasks, {Color? color, required this.showAssignee}) : _color = color;
 
   final String title;
   final List<TaskItem> tasks;
-  final Color color;
+  final Color? _color;
+  Color get color => _color ?? AppColors.subtle;
   final bool showAssignee;
 
   @override
@@ -154,7 +156,7 @@ class _Group extends StatelessWidget {
             child: Column(
               children: [
                 for (var i = 0; i < tasks.length; i++) ...[
-                  if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                  if (i > 0) Divider(height: 1, color: AppColors.divider),
                   TaskRow(task: tasks[i], showAssignee: showAssignee),
                 ],
               ],
@@ -177,10 +179,10 @@ class TaskRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = task;
     final tags = <Widget>[
-      if (!t.isDone && t.priority == Priority.urgent) Pill.urgent('عاجل'),
+      if (!t.isDone && t.priority == Priority.urgent) Pill.urgent(tr('عاجل')),
       if (t.requestNumber != null) _Tag('#${t.requestNumber}'),
       if (t.clientName != null) _Tag(t.clientName!),
-      if (t.fromMeeting) Pill.info('من اجتماع'),
+      if (t.fromMeeting) Pill.info(tr('من اجتماع')),
       if (showAssignee && t.assigneeName != null) _Tag(t.assigneeName!),
       if (t.dueAt != null)
         Text(
@@ -238,7 +240,7 @@ class TaskRow extends ConsumerWidget {
   String _dueLabel(DateTime d) {
     final day = relativeDay(d);
     final hasTime = d.hour != 0 || d.minute != 0;
-    if (day == 'اليوم') return hasTime ? formatTime(d) : 'اليوم';
+    if (day == tr('اليوم')) return hasTime ? formatTime(d) : tr('اليوم');
     return day;
   }
 }
@@ -252,7 +254,7 @@ class _Tag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(color: AppColors.neutralSoft, borderRadius: BorderRadius.circular(6)),
-      child: Text(text, style: const TextStyle(fontSize: 11, color: AppColors.subtle)),
+      child: Text(text, style: TextStyle(fontSize: 11, color: AppColors.subtle)),
     );
   }
 }

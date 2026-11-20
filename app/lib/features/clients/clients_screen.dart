@@ -10,6 +10,7 @@ import '../../data/section_models.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/forms.dart';
+import '../../core/i18n.dart';
 
 /// قائمة العملاء
 class ClientsScreen extends ConsumerStatefulWidget {
@@ -32,10 +33,10 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     final clients = ref.watch(clientsProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('العملاء'),
+        title: Text(tr('العملاء')),
         actions: [
           if (ref.watch(profileProvider).valueOrNull?.can(Permissions.clientsManage) ?? false)
-            IconButton(tooltip: 'عميل جديد', onPressed: _addClient, icon: const Icon(Icons.person_add_alt)),
+            IconButton(tooltip: tr('عميل جديد'), onPressed: _addClient, icon: const Icon(Icons.person_add_alt)),
           const SizedBox(width: 8),
         ],
       ),
@@ -43,9 +44,9 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
         children: [
           TextField(
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               prefixIcon: Icon(Icons.search),
-              hintText: 'ابحث عن عميل',
+              hintText: tr('ابحث عن عميل'),
             ),
             onChanged: (v) => setState(() => _query = v.trim()),
           ),
@@ -55,21 +56,21 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
             onRetry: () => ref.invalidate(clientsProvider),
             builder: (list) {
               final filtered = _query.isEmpty ? list : list.where((c) => c.name.contains(_query)).toList();
-              if (filtered.isEmpty) return const EmptyState('لا يوجد عملاء', icon: Icons.people_outline);
+              if (filtered.isEmpty) return EmptyState(tr('لا يوجد عملاء'), icon: Icons.people_outline);
               return CardBox(
                 padding: EdgeInsets.zero,
                 child: Column(
                   children: [
                     for (var i = 0; i < filtered.length; i++) ...[
-                      if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                      if (i > 0) Divider(height: 1, color: AppColors.divider),
                       ListTile(
                         leading: Avatar(filtered[i].initial, size: 40, radius: 12),
                         title: Text(filtered[i].name, style: const TextStyle(fontWeight: FontWeight.w600)),
                         subtitle: Text(
                           [filtered[i].sector, filtered[i].city].whereType<String>().join(' · '),
-                          style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                          style: TextStyle(color: AppColors.muted, fontSize: 12),
                         ),
-                        trailing: const Icon(Icons.chevron_left, color: Color(0xFF9AA2AE)),
+                        trailing: Icon(AppIcons.forward, color: AppColors.faint),
                         onTap: () => context.go('/more/clients/${filtered[i].id}'),
                       ),
                     ],
@@ -110,15 +111,15 @@ class _NewClientSheetState extends ConsumerState<NewClientSheet> {
   Future<void> _save(FieldConfig cfg) async {
     bool req(String k) => cfg.isVisible(k) && cfg.isRequired(k);
     final missing = _name.text.trim().isEmpty
-        ? 'اكتب اسم العميل'
+        ? tr('اكتب اسم العميل')
         : (req('sector') && _sector == null)
-            ? 'اختر ${cfg.labelOf('sector', 'القطاع')}'
+            ? tr('اختر {0}', [cfg.labelOf('sector', tr('القطاع'))])
             : (req('city') && (_city ?? '').isEmpty)
-                ? 'أدخل ${cfg.labelOf('city', 'المدينة')}'
+                ? tr('أدخل {0}', [cfg.labelOf('city', tr('المدينة'))])
                 : (req('cr_number') && (_cr ?? '').isEmpty)
-                    ? 'أدخل ${cfg.labelOf('cr_number', 'السجل التجاري')}'
+                    ? tr('أدخل {0}', [cfg.labelOf('cr_number', tr('السجل التجاري'))])
                     : (req('vat_number') && (_vat ?? '').isEmpty)
-                        ? 'أدخل ${cfg.labelOf('vat_number', 'الرقم الضريبي')}'
+                        ? tr('أدخل {0}', [cfg.labelOf('vat_number', tr('الرقم الضريبي'))])
                         : missingRequired(cfg.customVisible, _custom);
     if (missing != null) {
       showSnack(context, missing);
@@ -151,7 +152,7 @@ class _NewClientSheetState extends ConsumerState<NewClientSheet> {
 
     Widget textRow(String key, String label, String? value, ValueChanged<String> set) => FormRow(
           label: star(key, label),
-          value: value ?? 'أدخل',
+          value: value ?? tr('أدخل'),
           muted: value == null,
           onTap: () async {
             final v = await promptText(context, cfg.labelOf(key, label), initial: value);
@@ -160,23 +161,23 @@ class _NewClientSheetState extends ConsumerState<NewClientSheet> {
         );
 
     return SheetBody(
-      title: 'عميل جديد',
+      title: tr('عميل جديد'),
       busy: _busy,
       onSubmit: () => _save(cfg),
       children: [
-        TextField(controller: _name, autofocus: true, decoration: InputDecoration(labelText: cfg.labelOf('name', 'اسم الشركة أو الجهة'))),
+        TextField(controller: _name, autofocus: true, decoration: InputDecoration(labelText: cfg.labelOf('name', tr('اسم الشركة أو الجهة')))),
         const SizedBox(height: 14),
         FormCard(children: [
           if (cfg.isVisible('sector'))
             FormDropdown<String>(
-              label: star('sector', 'القطاع'),
+              label: star('sector', tr('القطاع')),
               value: _sector,
               items: {for (final o in cfg.optionsOf('sector')) o: o},
               onChanged: (v) => setState(() => _sector = v),
             ),
-          if (cfg.isVisible('city')) textRow('city', 'المدينة', _city, (v) => _city = v),
-          if (cfg.isVisible('cr_number')) textRow('cr_number', 'السجل التجاري', _cr, (v) => _cr = v),
-          if (cfg.isVisible('vat_number')) textRow('vat_number', 'الرقم الضريبي', _vat, (v) => _vat = v),
+          if (cfg.isVisible('city')) textRow('city', tr('المدينة'), _city, (v) => _city = v),
+          if (cfg.isVisible('cr_number')) textRow('cr_number', tr('السجل التجاري'), _cr, (v) => _cr = v),
+          if (cfg.isVisible('vat_number')) textRow('vat_number', tr('الرقم الضريبي'), _vat, (v) => _vat = v),
           ...customFieldRows(
             context: context,
             fields: cfg.customVisible,

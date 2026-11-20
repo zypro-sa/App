@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme.dart';
 import '../../widgets/common.dart';
+import '../../core/i18n.dart';
+import '../../widgets/display_toggles.dart';
 
 /// تسجيل الدخول وإنشاء الحساب.
 /// أول حساب يُنشأ يصبح «المالك» تلقائيًا (من قاعدة البيانات).
@@ -41,7 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
           data: {'name': _name.text.trim()},
         );
         if (res.session == null && mounted) {
-          showSnack(context, 'تم إنشاء الحساب. افتح بريدك لتأكيده ثم سجّل الدخول.');
+          showSnack(context, tr('تم إنشاء الحساب. افتح بريدك لتأكيده ثم سجّل الدخول.'));
           setState(() => _signUp = false);
         }
       } else {
@@ -50,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } on AuthException catch (e) {
       if (mounted) showSnack(context, _authMessage(e));
     } catch (e) {
-      if (mounted) showSnack(context, 'حدث خطأ: $e');
+      if (mounted) showSnack(context, tr('حدث خطأ: {0}', [e]));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -58,9 +60,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String _authMessage(AuthException e) {
     final m = e.message.toLowerCase();
-    if (m.contains('invalid login')) return 'البريد أو كلمة المرور غير صحيحة';
-    if (m.contains('already registered')) return 'هذا البريد مسجّل مسبقًا';
-    if (m.contains('email not confirmed')) return 'أكّد بريدك الإلكتروني أولًا';
+    if (m.contains('invalid login')) return tr('البريد أو كلمة المرور غير صحيحة');
+    if (m.contains('already registered')) return tr('هذا البريد مسجّل مسبقًا');
+    if (m.contains('email not confirmed')) return tr('أكّد بريدك الإلكتروني أولًا');
     return e.message;
   }
 
@@ -76,59 +78,61 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Center(child: Image.asset('assets/brand/zypro_wordmark.png', width: 170, semanticLabel: 'Zypro')),
+                  const Align(alignment: AlignmentDirectional.centerEnd, child: DisplayToggles()),
+                  const SizedBox(height: 8),
+                  Center(child: Image.asset(AppAssets.wordmark, width: 170, semanticLabel: 'Zypro')),
                   const SizedBox(height: 16),
                   Text(
-                    _signUp ? 'إنشاء حساب' : 'أهلًا بعودتك',
+                    _signUp ? tr('إنشاء حساب') : tr('أهلًا بعودتك'),
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _signUp ? 'أنشئ حسابك للبدء' : 'سجّل الدخول لمتابعة يومك',
+                    _signUp ? tr('أنشئ حسابك للبدء') : tr('سجّل الدخول لمتابعة يومك'),
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: AppColors.muted),
+                    style: TextStyle(color: AppColors.muted),
                   ),
                   const SizedBox(height: 32),
                   if (_signUp) ...[
                     TextFormField(
                       controller: _name,
-                      decoration: const InputDecoration(labelText: 'الاسم'),
+                      decoration: InputDecoration(labelText: tr('الاسم')),
                       textInputAction: TextInputAction.next,
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'أدخل الاسم' : null,
+                      validator: (v) => (v == null || v.trim().isEmpty) ? tr('أدخل الاسم') : null,
                     ),
                     const SizedBox(height: 12),
                   ],
                   TextFormField(
                     controller: _email,
-                    decoration: const InputDecoration(labelText: 'البريد الإلكتروني'),
+                    decoration: InputDecoration(labelText: tr('البريد الإلكتروني')),
                     keyboardType: TextInputType.emailAddress,
                     textDirection: TextDirection.ltr,
                     textInputAction: TextInputAction.next,
                     autofillHints: const [AutofillHints.email],
-                    validator: (v) => (v == null || !v.contains('@')) ? 'أدخل بريدًا صحيحًا' : null,
+                    validator: (v) => (v == null || !v.contains('@')) ? tr('أدخل بريدًا صحيحًا') : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _password,
-                    decoration: const InputDecoration(labelText: 'كلمة المرور'),
+                    decoration: InputDecoration(labelText: tr('كلمة المرور')),
                     obscureText: true,
                     textDirection: TextDirection.ltr,
                     autofillHints: const [AutofillHints.password],
                     onFieldSubmitted: (_) => _submit(),
-                    validator: (v) => (v == null || v.length < 8) ? '٨ أحرف على الأقل' : null,
+                    validator: (v) => (v == null || v.length < 8) ? tr('٨ أحرف على الأقل') : null,
                   ),
                   const SizedBox(height: 24),
                   FilledButton(
                     onPressed: _busy ? null : _submit,
                     child: _busy
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : Text(_signUp ? 'إنشاء الحساب' : 'تسجيل الدخول'),
+                        : Text(_signUp ? tr('إنشاء الحساب') : tr('تسجيل الدخول')),
                   ),
                   const SizedBox(height: 8),
                   TextButton(
                     onPressed: _busy ? null : () => setState(() => _signUp = !_signUp),
-                    child: Text(_signUp ? 'لديك حساب؟ سجّل الدخول' : 'ليس لديك حساب؟ أنشئ حسابًا'),
+                    child: Text(_signUp ? tr('لديك حساب؟ سجّل الدخول') : tr('ليس لديك حساب؟ أنشئ حسابًا')),
                   ),
                 ],
               ),

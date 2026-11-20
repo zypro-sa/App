@@ -5,9 +5,10 @@ import '../core/formatters.dart';
 import '../core/theme.dart';
 import '../data/section_models.dart';
 import 'common.dart';
+import '../core/i18n.dart';
 
-final _money = NumberFormat.decimalPattern('ar');
-String money(num v) => '${_money.format(v)} ر.س';
+NumberFormat get _money => NumberFormat.decimalPattern(L.code);
+String money(num v) => tr('{0} ر.س', [_money.format(v)]);
 String moneyShort(num v) => _money.format(v);
 
 Future<DateTime?> pickDate(BuildContext context, {DateTime? initial}) {
@@ -26,7 +27,7 @@ Future<String?> promptText(
   String? initial,
   String? label,
   bool multiline = false,
-  String confirmLabel = 'حفظ',
+  String? confirmLabel,
 }) async {
   final c = TextEditingController(text: initial ?? '');
   final result = await showDialog<String>(
@@ -41,8 +42,8 @@ Future<String?> promptText(
         decoration: InputDecoration(labelText: label),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, c.text.trim()), child: Text(confirmLabel)),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('إلغاء'))),
+        FilledButton(onPressed: () => Navigator.pop(ctx, c.text.trim()), child: Text(confirmLabel ?? tr('حفظ'))),
       ],
     ),
   );
@@ -57,7 +58,7 @@ Future<num?> promptNumber(BuildContext context, String title, {String? label, nu
 }
 
 String _toLatinDigits(String s) {
-  const ar = '٠١٢٣٤٥٦٧٨٩';
+  final ar = '٠١٢٣٤٥٦٧٨٩';
   final b = StringBuffer();
   for (final ch in s.split('')) {
     final i = ar.indexOf(ch);
@@ -72,7 +73,7 @@ Future<bool> confirmAction(
   BuildContext context, {
   required String title,
   required String message,
-  String confirmLabel = 'تأكيد',
+  String? confirmLabel,
   bool destructive = false,
 }) async {
   final ok = await showDialog<bool>(
@@ -81,11 +82,11 @@ Future<bool> confirmAction(
       title: Text(title),
       content: Text(message, style: const TextStyle(height: 1.6)),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('إلغاء'))),
         FilledButton(
-          style: destructive ? FilledButton.styleFrom(backgroundColor: const Color(0xFFC2410C)) : null,
+          style: destructive ? FilledButton.styleFrom(backgroundColor: AppColors.danger) : null,
           onPressed: () => Navigator.pop(ctx, true),
-          child: Text(confirmLabel),
+          child: Text(confirmLabel ?? tr('تأكيد')),
         ),
       ],
     ),
@@ -100,14 +101,14 @@ Future<bool> runAction(BuildContext context, Future<void> Function() action, {St
     if (success != null && context.mounted) showSnack(context, success);
     return true;
   } catch (e) {
-    if (context.mounted) showSnack(context, 'تعذّر التنفيذ: ${_friendly(e)}');
+    if (context.mounted) showSnack(context, tr('تعذّر التنفيذ: {0}', [_friendly(e)]));
     return false;
   }
 }
 
 String _friendly(Object e) {
   final s = e.toString();
-  if (s.contains('row-level security') || s.contains('42501')) return 'ليست لديك صلاحية لهذه العملية';
+  if (s.contains('row-level security') || s.contains('42501')) return tr('ليست لديك صلاحية لهذه العملية');
   final m = RegExp(r'message: ([^,]+)').firstMatch(s);
   return m?.group(1) ?? s.replaceFirst('Exception: ', '');
 }
@@ -119,7 +120,7 @@ Future<T?> showFormSheet<T>(BuildContext context, Widget child) {
     isScrollControlled: true,
     showDragHandle: true,
     useSafeArea: true,
-    backgroundColor: Colors.white,
+    backgroundColor: AppColors.surface,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
     builder: (_) => child,
   );
@@ -131,14 +132,15 @@ class SheetBody extends StatelessWidget {
     required this.title,
     required this.children,
     required this.onSubmit,
-    this.submitLabel = 'حفظ',
+    String? submitLabel,
     this.busy = false,
-  });
+  }) : _submitLabel = submitLabel;
 
   final String title;
   final List<Widget> children;
   final VoidCallback? onSubmit;
-  final String submitLabel;
+  final String? _submitLabel;
+  String get submitLabel => _submitLabel ?? tr('حفظ');
   final bool busy;
 
   @override
@@ -153,7 +155,7 @@ class SheetBody extends StatelessWidget {
             Row(
               children: [
                 Expanded(child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700))),
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('إلغاء'))),
               ],
             ),
             const SizedBox(height: 12),
@@ -195,7 +197,7 @@ class FormRow extends StatelessWidget {
               child: Text(
                 value,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 14, color: muted ? const Color(0xFF9AA2AE) : AppColors.muted),
+                style: TextStyle(fontSize: 14, color: muted ? AppColors.faint : AppColors.muted),
               ),
             ),
           ],
@@ -213,15 +215,16 @@ class FormDropdown<T> extends StatelessWidget {
     required this.items,
     required this.onChanged,
     this.allowEmpty = true,
-    this.emptyLabel = 'بدون',
-  });
+    String? emptyLabel,
+  }) : _emptyLabel = emptyLabel;
 
   final String label;
   final T? value;
   final Map<T, String> items;
   final ValueChanged<T?> onChanged;
   final bool allowEmpty;
-  final String emptyLabel;
+  final String? _emptyLabel;
+  String get emptyLabel => _emptyLabel ?? tr('بدون');
 
   @override
   Widget build(BuildContext context) {
@@ -236,8 +239,8 @@ class FormDropdown<T> extends StatelessWidget {
               child: DropdownButton<T?>(
                 value: safeValue,
                 isDense: true,
-                hint: Text(emptyLabel, style: const TextStyle(color: AppColors.muted)),
-                style: const TextStyle(fontSize: 14, color: AppColors.muted, fontFamily: 'IBM Plex Sans Arabic'),
+                hint: Text(emptyLabel, style: TextStyle(color: AppColors.muted)),
+                style: TextStyle(fontSize: 14, color: AppColors.muted, fontFamily: 'IBM Plex Sans Arabic'),
                 items: [
                   if (allowEmpty) DropdownMenuItem<T?>(value: null, child: Text(emptyLabel)),
                   for (final e in items.entries)
@@ -262,7 +265,7 @@ class FormCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final rows = <Widget>[];
     for (var i = 0; i < children.length; i++) {
-      if (i > 0) rows.add(const Divider(height: 1, color: AppColors.divider));
+      if (i > 0) rows.add(Divider(height: 1, color: AppColors.divider));
       rows.add(children[i]);
     }
     return CardBox(
@@ -297,7 +300,7 @@ List<Widget> customFieldRows({
           ),
         FieldType.date => FormRow(
             label: f.required ? '${f.label} *' : f.label,
-            value: values[f.key] == null ? 'اختر' : formatShortDate(DateTime.parse(values[f.key] as String)),
+            value: values[f.key] == null ? tr('اختر') : formatShortDate(DateTime.parse(values[f.key] as String)),
             onTap: () async {
               final d = await pickDate(context);
               if (d != null) onChanged(f.key, d.toIso8601String().substring(0, 10));
@@ -305,7 +308,7 @@ List<Widget> customFieldRows({
           ),
         _ => FormRow(
             label: f.required ? '${f.label} *' : f.label,
-            value: values[f.key]?.toString() ?? 'أدخل',
+            value: values[f.key]?.toString() ?? tr('أدخل'),
             muted: values[f.key] == null,
             onTap: () async {
               if (f.type == FieldType.text) {
@@ -326,7 +329,7 @@ String? missingRequired(List<FieldSetting> fields, Map<String, dynamic> values) 
   for (final f in fields) {
     final v = values[f.key];
     if (f.required && f.type != FieldType.boolean && (v == null || (v is String && v.isEmpty))) {
-      return 'الحقل «${f.label}» مطلوب';
+      return tr('الحقل «{0}» مطلوب', [f.label]);
     }
   }
   return null;
@@ -357,7 +360,7 @@ PreferredSizeWidget sectionAppBar(String title, {String? subtitle, List<Widget>?
       children: [
         Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
         if (subtitle != null)
-          Text(subtitle, style: const TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w400)),
+          Text(subtitle, style: TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w400)),
       ],
     ),
     actions: [...?actions, const SizedBox(width: 8)],

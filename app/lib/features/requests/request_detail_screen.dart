@@ -11,6 +11,7 @@ import '../../data/section_models.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/forms.dart';
+import '../../core/i18n.dart';
 
 /// تفاصيل الطلب: البيانات، شروط الدفع، والخطوات (تمت / لم تتم)
 class RequestDetailScreen extends ConsumerWidget {
@@ -38,42 +39,42 @@ class RequestDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('تفاصيل الطلب'),
+        title: Text(tr('تفاصيل الطلب')),
         centerTitle: true,
         actions: [
           if (d != null && (canEdit || canDelete))
             PopupMenuButton<String>(
-              tooltip: 'خيارات',
+              tooltip: tr('خيارات'),
               onSelected: (v) async {
                 if (v == 'rename') {
-                  final t = await promptText(context, 'عنوان الطلب', initial: d.item.title);
+                  final t = await promptText(context, tr('عنوان الطلب'), initial: d.item.title);
                   if (t != null) await update({'title': t});
                 } else if (v == 'delete') {
                   final ok = await confirmAction(context,
-                      title: 'حذف الطلب #${d.item.number}؟',
-                      message: 'ينتقل إلى سلة المحذوفات ويمكن استرجاعه خلال ٣٠ يومًا.',
-                      confirmLabel: 'حذف',
+                      title: tr('حذف الطلب #{0}؟', [d.item.number]),
+                      message: tr('ينتقل إلى سلة المحذوفات ويمكن استرجاعه خلال ٣٠ يومًا.'),
+                      confirmLabel: tr('حذف'),
                       destructive: true);
                   if (!ok || !context.mounted) return;
-                  if (await runAction(context, () => repo.softDelete('requests', [requestId]), success: 'نُقل إلى السلة')) {
+                  if (await runAction(context, () => repo.softDelete('requests', [requestId]), success: tr('نُقل إلى السلة'))) {
                     refreshSections(ref);
                     if (context.mounted) context.go('/requests');
                   }
                 } else {
-                  await update({'status': v}, success: 'تم تغيير الحالة');
+                  await update({'status': v}, success: tr('تم تغيير الحالة'));
                 }
               },
               itemBuilder: (_) => [
                 if (canEdit) ...[
-                  const PopupMenuItem(value: 'rename', child: Text('تعديل العنوان')),
+                  PopupMenuItem(value: 'rename', child: Text(tr('تعديل العنوان'))),
                   const PopupMenuDivider(),
                   for (final s in RequestStatus.values)
                     if (s != d.item.status)
-                      PopupMenuItem(value: s.db, child: Text('تغيير الحالة: ${labels[s.db]?.label ?? s.label}')),
+                      PopupMenuItem(value: s.db, child: Text(tr('تغيير الحالة: {0}', [labels[s.db]?.label ?? s.label]))),
                 ],
                 if (canDelete) ...[
                   const PopupMenuDivider(),
-                  const PopupMenuItem(value: 'delete', child: Text('حذف الطلب', style: TextStyle(color: AppColors.urgent))),
+                  PopupMenuItem(value: 'delete', child: Text(tr('حذف الطلب'), style: TextStyle(color: AppColors.urgent))),
                 ],
               ],
             ),
@@ -109,7 +110,7 @@ class _Body extends ConsumerWidget {
     final r = d.item;
     final cfg = ref.watch(fieldConfigProvider(ConfigEntity.request)).valueOrNull ?? FieldConfig(const []);
     final sl = labels[r.status.db];
-    final progressColor = r.isOverdue ? const Color(0xFFC2410C) : AppColors.accent;
+    final progressColor = r.isOverdue ? AppColors.danger : AppColors.accent;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -146,13 +147,13 @@ class _Body extends ConsumerWidget {
                 children: [
                   Expanded(child: ProgressLine(r.progress, height: 10, color: progressColor)),
                   const SizedBox(width: 10),
-                  Text('${r.progress}٪', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  Text(tr('{0}٪', [r.progress]), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                 ],
               ),
               if (d.steps.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                Text('${d.doneSteps} من ${d.steps.length} خطوات تمت',
-                    style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                Text(tr('{0} من {1} خطوات تمت', [d.doneSteps, d.steps.length]),
+                    style: TextStyle(fontSize: 12, color: AppColors.muted)),
               ],
             ],
           ),
@@ -162,42 +163,42 @@ class _Body extends ConsumerWidget {
           if (cfg.isVisible('service_type'))
             canEdit
                 ? FormDropdown<String>(
-                    label: cfg.labelOf('service_type', 'نوع الخدمة'),
+                    label: cfg.labelOf('service_type', tr('نوع الخدمة')),
                     value: d.serviceType,
                     items: {
                       for (final o in {...cfg.optionsOf('service_type'), if (d.serviceType != null) d.serviceType!}) o: o,
                     },
                     onChanged: (v) => update({'service_type': v}),
                   )
-                : FormRow(label: cfg.labelOf('service_type', 'نوع الخدمة'), value: d.serviceType ?? '—'),
+                : FormRow(label: cfg.labelOf('service_type', tr('نوع الخدمة')), value: d.serviceType ?? '—'),
           if (cfg.isVisible('payment_terms'))
             canEdit
                 ? FormDropdown<String>(
-                    label: cfg.labelOf('payment_terms', 'شروط الدفع'),
+                    label: cfg.labelOf('payment_terms', tr('شروط الدفع')),
                     value: d.paymentTerms,
-                    emptyLabel: 'حدّد',
+                    emptyLabel: tr('حدّد'),
                     items: {
                       for (final o in {...cfg.optionsOf('payment_terms'), if (d.paymentTerms != null) d.paymentTerms!}) o: o,
                     },
                     onChanged: (v) => update({'payment_terms': v}),
                   )
-                : FormRow(label: cfg.labelOf('payment_terms', 'شروط الدفع'), value: d.paymentTerms ?? '—'),
+                : FormRow(label: cfg.labelOf('payment_terms', tr('شروط الدفع')), value: d.paymentTerms ?? '—'),
           if (cfg.isVisible('estimated_value') || d.estimatedValue != null)
             FormRow(
-              label: cfg.labelOf('estimated_value', 'القيمة'),
-              value: d.estimatedValue == null ? 'أدخل' : money(d.estimatedValue!),
+              label: cfg.labelOf('estimated_value', tr('القيمة')),
+              value: d.estimatedValue == null ? tr('أدخل') : money(d.estimatedValue!),
               muted: d.estimatedValue == null,
               onTap: !canEdit
                   ? null
                   : () async {
-                      final v = await promptNumber(context, cfg.labelOf('estimated_value', 'القيمة'), initial: d.estimatedValue);
+                      final v = await promptNumber(context, cfg.labelOf('estimated_value', tr('القيمة')), initial: d.estimatedValue);
                       if (v != null) await update({'estimated_value': v});
                     },
             ),
           if (cfg.isVisible('due_date'))
             FormRow(
-              label: cfg.labelOf('due_date', 'الموعد النهائي'),
-              value: r.dueDate == null ? 'بدون موعد' : formatShortDate(r.dueDate!),
+              label: cfg.labelOf('due_date', tr('الموعد النهائي')),
+              value: r.dueDate == null ? tr('بدون موعد') : formatShortDate(r.dueDate!),
               muted: r.dueDate == null,
               onTap: !canEdit
                   ? null
@@ -208,12 +209,12 @@ class _Body extends ConsumerWidget {
                       }
                     },
             ),
-          if (cfg.isVisible('priority')) FormRow(label: cfg.labelOf('priority', 'الأولوية'), value: r.priority.label),
-          FormRow(label: 'المسؤول', value: r.assigneeName ?? '—'),
-          if (d.receivedAt != null) FormRow(label: 'تاريخ الاستلام', value: formatShortDate(d.receivedAt!)),
+          if (cfg.isVisible('priority')) FormRow(label: cfg.labelOf('priority', tr('الأولوية')), value: r.priority.label),
+          FormRow(label: tr('المسؤول'), value: r.assigneeName ?? '—'),
+          if (d.receivedAt != null) FormRow(label: tr('تاريخ الاستلام'), value: formatShortDate(d.receivedAt!)),
           for (final f in cfg.customVisible)
             if (d.custom[f.key] != null)
-              FormRow(label: f.label, value: f.type == FieldType.boolean ? (d.custom[f.key] == true ? 'نعم' : 'لا') : '${d.custom[f.key]}'),
+              FormRow(label: f.label, value: f.type == FieldType.boolean ? (d.custom[f.key] == true ? tr('نعم') : tr('لا')) : '${d.custom[f.key]}'),
         ]),
         if (d.description != null && d.description!.trim().isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -222,7 +223,7 @@ class _Body extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('التفاصيل', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.subtle)),
+                Text(tr('التفاصيل'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.subtle)),
                 const SizedBox(height: 6),
                 Text(d.description!, style: const TextStyle(fontSize: 14, height: 1.7)),
               ],
@@ -236,15 +237,15 @@ class _Body extends ConsumerWidget {
             decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(16)),
             child: Row(
               children: [
-                const Expanded(
-                  child: Text('كل الخطوات تمت. أغلق الطلب ليبدأ تحصيل المتبقي من فواتيره.',
+                Expanded(
+                  child: Text(tr('كل الخطوات تمت. أغلق الطلب ليبدأ تحصيل المتبقي من فواتيره.'),
                       style: TextStyle(fontSize: 13, height: 1.6, color: AppColors.accentText, fontWeight: FontWeight.w600)),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
                   style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
-                  onPressed: () => update({'status': 'closed'}, success: 'أُغلق الطلب'),
-                  child: const Text('إغلاق الطلب'),
+                  onPressed: () => update({'status': 'closed'}, success: tr('أُغلق الطلب')),
+                  child: Text(tr('إغلاق الطلب')),
                 ),
               ],
             ),
@@ -279,18 +280,18 @@ class _Steps extends ConsumerWidget {
           children: [
             Expanded(
               child: Text(
-                d.steps.isEmpty ? 'الخطوات' : 'الخطوات · ${d.doneSteps}/${d.steps.length}',
+                d.steps.isEmpty ? tr('الخطوات') : tr('الخطوات · {0}/{1}', [d.doneSteps, d.steps.length]),
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ),
             if (canEdit)
               TextButton.icon(
                 onPressed: () async {
-                  final t = await promptText(context, 'خطوة جديدة', label: 'مثال: إصدار رخصة الدفاع المدني', confirmLabel: 'إضافة');
-                  if (t != null) await run(() => repo.addStep(d.item.id, t, d.steps.length + 1), success: 'أُضيفت الخطوة');
+                  final t = await promptText(context, tr('خطوة جديدة'), label: tr('مثال: إصدار رخصة الدفاع المدني'), confirmLabel: tr('إضافة'));
+                  if (t != null) await run(() => repo.addStep(d.item.id, t, d.steps.length + 1), success: tr('أُضيفت الخطوة'));
                 },
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('خطوة'),
+                label: Text(tr('خطوة')),
               ),
           ],
         ),
@@ -300,9 +301,9 @@ class _Steps extends ConsumerWidget {
             radius: 16,
             child: Text(
               canEdit
-                  ? 'قسّم الطلب إلى خطوات، وعند تأشير كل خطوة تتحدث نسبة الإنجاز تلقائيًا.'
-                  : 'لم تُضف خطوات لهذا الطلب بعد.',
-              style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.6),
+                  ? tr('قسّم الطلب إلى خطوات، وعند تأشير كل خطوة تتحدث نسبة الإنجاز تلقائيًا.')
+                  : tr('لم تُضف خطوات لهذا الطلب بعد.'),
+              style: TextStyle(color: AppColors.muted, fontSize: 13, height: 1.6),
             ),
           )
         else
@@ -312,7 +313,7 @@ class _Steps extends ConsumerWidget {
             child: Column(
               children: [
                 for (var i = 0; i < d.steps.length; i++) ...[
-                  if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                  if (i > 0) Divider(height: 1, color: AppColors.divider),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -337,31 +338,31 @@ class _Steps extends ConsumerWidget {
                                 ),
                               ),
                               if (d.steps[i].isDone && d.steps[i].doneAt != null)
-                                Text('تمت ${relativeDay(d.steps[i].doneAt!)}',
-                                    style: const TextStyle(fontSize: 11, color: AppColors.done)),
+                                Text(tr('تمت {0}', [relativeDay(d.steps[i].doneAt!)]),
+                                    style: TextStyle(fontSize: 11, color: AppColors.done)),
                               if (i == firstOpen)
-                                const Text('الخطوة الحالية', style: TextStyle(fontSize: 11, color: AppColors.accentText)),
+                                Text(tr('الخطوة الحالية'), style: TextStyle(fontSize: 11, color: AppColors.accentText)),
                             ],
                           ),
                         ),
                       ),
                       if (canEdit)
                         PopupMenuButton<String>(
-                          tooltip: 'خيارات الخطوة',
-                          icon: const Icon(Icons.more_vert, size: 18, color: AppColors.muted),
+                          tooltip: tr('خيارات الخطوة'),
+                          icon: Icon(Icons.more_vert, size: 18, color: AppColors.muted),
                           onSelected: (v) async {
                             if (v == 'rename') {
-                              final t = await promptText(context, 'تعديل الخطوة', initial: d.steps[i].title);
+                              final t = await promptText(context, tr('تعديل الخطوة'), initial: d.steps[i].title);
                               if (t != null) await run(() => repo.renameStep(d.steps[i].id, t));
                             } else {
                               final ok = await confirmAction(context,
-                                  title: 'حذف الخطوة؟', message: '«${d.steps[i].title}»', confirmLabel: 'حذف', destructive: true);
-                              if (ok) await run(() => repo.deleteStep(d.steps[i].id), success: 'حُذفت الخطوة');
+                                  title: tr('حذف الخطوة؟'), message: '«${d.steps[i].title}»', confirmLabel: tr('حذف'), destructive: true);
+                              if (ok) await run(() => repo.deleteStep(d.steps[i].id), success: tr('حُذفت الخطوة'));
                             }
                           },
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(value: 'rename', child: Text('تعديل')),
-                            PopupMenuItem(value: 'delete', child: Text('حذف', style: TextStyle(color: AppColors.urgent))),
+                          itemBuilder: (_) => [
+                            PopupMenuItem(value: 'rename', child: Text(tr('تعديل'))),
+                            PopupMenuItem(value: 'delete', child: Text(tr('حذف'), style: TextStyle(color: AppColors.urgent))),
                           ],
                         )
                       else
@@ -399,10 +400,10 @@ class _LinkedInvoices extends ConsumerWidget {
           children: [
             Row(
               children: [
-                const Expanded(
-                  child: Text('الفواتير المرتبطة', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.subtle)),
+                Expanded(
+                  child: Text(tr('الفواتير المرتبطة'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.subtle)),
                 ),
-                if (remaining > 0) Pill.waiting('المتبقي ${moneyShort(remaining)}') else Pill.done('مسددة'),
+                if (remaining > 0) Pill.waiting(tr('المتبقي {0}', [moneyShort(remaining)])) else Pill.done(tr('مسددة')),
               ],
             ),
             const SizedBox(height: 6),
@@ -410,14 +411,14 @@ class _LinkedInvoices extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Text(
-                  '${i.number} · ${moneyShort(i.net)} · ${i.isVoid ? 'ملغاة' : (i.remaining > 0 ? 'متبقٍ ${moneyShort(i.remaining)}' : 'مدفوعة')}',
+                  '${i.number} · ${moneyShort(i.net)} · ${i.isVoid ? tr('ملغاة') : (i.remaining > 0 ? tr('متبقٍ {0}', [moneyShort(i.remaining)]) : tr('مدفوعة'))}',
                   style: const TextStyle(fontSize: 13),
                 ),
               ),
             if (open && remaining > 0)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(top: 4),
-                child: Text('متابعة التحصيل تُنشأ تلقائيًا عند إغلاق الطلب',
+                child: Text(tr('متابعة التحصيل تُنشأ تلقائيًا عند إغلاق الطلب'),
                     style: TextStyle(fontSize: 11, color: AppColors.muted)),
               ),
           ],
