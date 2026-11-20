@@ -11,6 +11,7 @@ import '../../data/section_models.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/forms.dart';
+import '../../core/i18n.dart';
 
 /// ٩ · المشاريع
 class ProjectsScreen extends ConsumerStatefulWidget {
@@ -37,15 +38,15 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
 
     return Scaffold(
       appBar: sectionAppBar(
-        'المشاريع',
-        subtitle: '$active مشاريع جارية${soon > 0 ? ' · $soon يقترب موعده' : ''}',
+        tr('المشاريع'),
+        subtitle: tr('{0} مشاريع جارية{1}', [active, soon > 0 ? tr(' · {0} يقترب موعده', [soon]) : '']),
         actions: [
           if (canCreate)
             IconButton.filled(
-              tooltip: 'مشروع جديد',
+              tooltip: tr('مشروع جديد'),
               onPressed: () => showFormSheet(context, const NewProjectSheet()),
               icon: const Icon(Icons.add),
-              style: IconButton.styleFrom(backgroundColor: AppColors.ink),
+              style: IconButton.styleFrom(backgroundColor: AppColors.inkBlock, foregroundColor: AppColors.onInkBlock),
             ),
         ],
       ),
@@ -67,8 +68,8 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                     label: Text('${labels[s.db]?.label ?? s.label} ${counts[s] ?? 0}'),
                     selected: sel,
                     showCheckmark: false,
-                    selectedColor: AppColors.ink,
-                    labelStyle: TextStyle(color: sel ? Colors.white : AppColors.ink, fontWeight: sel ? FontWeight.w600 : FontWeight.w400),
+                    selectedColor: AppColors.inkBlock,
+                    labelStyle: TextStyle(color: sel ? AppColors.onInkBlock : AppColors.ink, fontWeight: sel ? FontWeight.w600 : FontWeight.w400),
                     onSelected: (_) => setState(() => _status = s),
                   );
                 },
@@ -79,7 +80,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
               value: projects,
               onRetry: () => ref.invalidate(projectsProvider(_status)),
               builder: (list) => list.isEmpty
-                  ? const EmptyState('لا توجد مشاريع هنا', icon: Icons.folder_open)
+                  ? EmptyState(tr('لا توجد مشاريع هنا'), icon: Icons.folder_open)
                   : Column(
                       children: [
                         for (final p in list) ...[
@@ -113,13 +114,13 @@ class _ProjectCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text(p.clientName ?? '', style: const TextStyle(fontSize: 12, color: AppColors.muted))),
+              Expanded(child: Text(p.clientName ?? '', style: TextStyle(fontSize: 12, color: AppColors.muted))),
               if (late)
-                Pill.urgent('متأخر ${-days} يومًا')
+                Pill.urgent(tr('متأخر {0} يومًا', [-days]))
               else if (urgent)
-                Pill.urgent(days == 0 ? 'التسليم اليوم' : 'التسليم بعد $days أيام')
+                Pill.urgent(days == 0 ? tr('التسليم اليوم') : tr('التسليم بعد {0} أيام', [days]))
               else if (p.endDate != null)
-                Pill.neutral('ينتهي ${formatShortDate(p.endDate!)}'),
+                Pill.neutral(tr('ينتهي {0}', [formatShortDate(p.endDate!)])),
             ],
           ),
           const SizedBox(height: 8),
@@ -129,7 +130,7 @@ class _ProjectCard extends StatelessWidget {
             children: [
               Expanded(child: ProgressLine(p.progress, height: 8)),
               const SizedBox(width: 10),
-              Text('${p.progress}٪', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              Text(tr('{0}٪', [p.progress]), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(height: 10),
@@ -138,9 +139,9 @@ class _ProjectCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   p.nextMilestone != null
-                      ? 'المرحلة التالية: ${p.nextMilestone}'
-                      : (p.milestonesTotal > 0 ? '${p.milestonesDone} من ${p.milestonesTotal} مراحل' : 'لم تُضف مراحل بعد'),
-                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                      ? tr('المرحلة التالية: {0}', [p.nextMilestone])
+                      : (p.milestonesTotal > 0 ? tr('{0} من {1} مراحل', [p.milestonesDone, p.milestonesTotal]) : tr('لم تُضف مراحل بعد')),
+                  style: TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
               ),
               if (p.managerName != null && p.managerName!.isNotEmpty) Avatar(p.managerName!.substring(0, 1)),
@@ -178,13 +179,13 @@ class _NewProjectSheetState extends ConsumerState<NewProjectSheet> {
 
   Future<void> _save(FieldConfig cfg) async {
     final missing = _name.text.trim().isEmpty
-        ? 'اكتب اسم المشروع'
+        ? tr('اكتب اسم المشروع')
         : _clientId == null
-            ? 'اختر العميل'
+            ? tr('اختر العميل')
             : (cfg.isRequired('end_date') && _end == null)
-                ? 'حدّد تاريخ التسليم'
+                ? tr('حدّد تاريخ التسليم')
                 : (cfg.isRequired('contract_value') && _value == null)
-                    ? 'أدخل قيمة العقد'
+                    ? tr('أدخل قيمة العقد')
                     : missingRequired(cfg.customVisible, _custom);
     if (missing != null) {
       showSnack(context, missing);
@@ -219,34 +220,34 @@ class _NewProjectSheetState extends ConsumerState<NewProjectSheet> {
     final cfg = ref.watch(fieldConfigProvider(ConfigEntity.project)).valueOrNull ?? FieldConfig(const []);
 
     return SheetBody(
-      title: 'مشروع جديد',
+      title: tr('مشروع جديد'),
       busy: _busy,
       onSubmit: () => _save(cfg),
       children: [
         TextField(
           controller: _name,
           autofocus: true,
-          decoration: InputDecoration(labelText: cfg.labelOf('name', 'اسم المشروع')),
+          decoration: InputDecoration(labelText: cfg.labelOf('name', tr('اسم المشروع'))),
         ),
         const SizedBox(height: 14),
         FormCard(children: [
           FormDropdown<String>(
-            label: '${cfg.labelOf('client_id', 'العميل')} *',
+            label: '${cfg.labelOf('client_id', tr('العميل'))} *',
             value: _clientId,
             items: {for (final c in clients) c.id: c.name},
             onChanged: (v) => setState(() => _clientId = v),
           ),
           FormDropdown<String>(
-            label: 'مدير المشروع',
+            label: tr('مدير المشروع'),
             value: _managerId,
-            emptyLabel: 'أنا',
+            emptyLabel: tr('أنا'),
             items: {for (final p in team) p.id: p.name},
             onChanged: (v) => setState(() => _managerId = v),
           ),
           if (cfg.isVisible('end_date'))
             FormRow(
-              label: cfg.labelOf('end_date', 'تاريخ التسليم'),
-              value: _end == null ? 'اختر' : formatShortDate(_end!),
+              label: cfg.labelOf('end_date', tr('تاريخ التسليم')),
+              value: _end == null ? tr('اختر') : formatShortDate(_end!),
               onTap: () async {
                 final d = await pickDate(context, initial: _end);
                 if (d != null) setState(() => _end = d);
@@ -254,10 +255,10 @@ class _NewProjectSheetState extends ConsumerState<NewProjectSheet> {
             ),
           if (cfg.isVisible('contract_value'))
             FormRow(
-              label: cfg.labelOf('contract_value', 'قيمة العقد'),
-              value: _value == null ? 'أدخل' : money(_value!),
+              label: cfg.labelOf('contract_value', tr('قيمة العقد')),
+              value: _value == null ? tr('أدخل') : money(_value!),
               onTap: () async {
-                final v = await promptNumber(context, 'قيمة العقد', label: 'بالريال');
+                final v = await promptNumber(context, tr('قيمة العقد'), label: tr('بالريال'));
                 if (v != null) setState(() => _value = v);
               },
             ),

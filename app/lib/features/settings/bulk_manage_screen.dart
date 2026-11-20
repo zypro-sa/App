@@ -9,6 +9,7 @@ import '../../data/repository.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/forms.dart';
+import '../../core/i18n.dart';
 
 /// ٢٠ · إدارة البيانات: تحديد جماعي، تعديل، تغيير الحالة، حذف
 class BulkManageScreen extends ConsumerStatefulWidget {
@@ -28,13 +29,13 @@ class _Section {
   final Map<String, String> statuses;
 }
 
-final _sections = [
-  _Section('requests', 'الطلبات', 'طلب', 'title', {for (final s in RequestStatus.values) s.db: s.label}),
-  _Section('tasks', 'المهام', 'مهمة', 'title', {for (final s in TaskStatus.values) s.db: s.label}),
-  const _Section('clients', 'العملاء', 'عميل', 'name', {'lead': 'محتمل', 'active': 'نشط', 'inactive': 'متوقف'}),
-  const _Section('meetings', 'الاجتماعات', 'اجتماع', 'title',
-      {'scheduled': 'مجدول', 'done': 'منعقد', 'cancelled': 'ملغى', 'postponed': 'مؤجل'}),
-  const _Section('notes', 'الملاحظات', 'ملاحظة', 'content', {}),
+List<_Section> get _sections => [
+  _Section('requests', tr('الطلبات'), tr('طلب'), 'title', {for (final s in RequestStatus.values) s.db: s.label}),
+  _Section('tasks', tr('المهام'), tr('مهمة'), 'title', {for (final s in TaskStatus.values) s.db: s.label}),
+  _Section('clients', tr('العملاء'), tr('عميل'), 'name', {'lead': tr('محتمل'), 'active': tr('نشط'), 'inactive': tr('متوقف')}),
+  _Section('meetings', tr('الاجتماعات'), tr('اجتماع'), 'title',
+      {'scheduled': tr('مجدول'), 'done': tr('منعقد'), 'cancelled': tr('ملغى'), 'postponed': tr('مؤجل')}),
+  _Section('notes', tr('الملاحظات'), tr('ملاحظة'), 'content', {}),
 ];
 
 class _BulkManageScreenState extends ConsumerState<BulkManageScreen> {
@@ -67,14 +68,14 @@ class _BulkManageScreenState extends ConsumerState<BulkManageScreen> {
     final n = _selected.length;
     final ok = await confirmAction(
       context,
-      title: 'حذف $n ${n == 1 ? _section.single : 'عناصر'}؟',
-      message: 'تنتقل إلى سلة المحذوفات، ويمكنك استرجاعها خلال ٣٠ يومًا. العناصر المرتبطة بها تبقى كما هي.',
-      confirmLabel: 'حذف',
+      title: tr('حذف {0} {1}؟', [n, n == 1 ? _section.single : tr('عناصر')]),
+      message: tr('تنتقل إلى سلة المحذوفات، ويمكنك استرجاعها خلال ٣٠ يومًا. العناصر المرتبطة بها تبقى كما هي.'),
+      confirmLabel: tr('حذف'),
       destructive: true,
     );
     if (!ok || !mounted) return;
     if (await runAction(context, () => ref.read(sectionRepoProvider).softDelete(_section.table, _selected.toList()),
-        success: 'نُقل $n إلى السلة')) {
+        success: tr('نُقل {0} إلى السلة', [n]))) {
       _after();
     }
   }
@@ -83,14 +84,14 @@ class _BulkManageScreenState extends ConsumerState<BulkManageScreen> {
     final status = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       builder: (ctx) => SafeArea(
         child: ListView(
           shrinkWrap: true,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text('الحالة الجديدة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              child: Text(tr('الحالة الجديدة'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             ),
             for (final e in _section.statuses.entries)
               ListTile(title: Text(e.value), onTap: () => Navigator.pop(ctx, e.key)),
@@ -100,7 +101,7 @@ class _BulkManageScreenState extends ConsumerState<BulkManageScreen> {
     );
     if (status == null || !mounted) return;
     if (await runAction(context, () => ref.read(sectionRepoProvider).setStatus(_section.table, _selected.toList(), status),
-        success: 'تم تغيير الحالة')) {
+        success: tr('تم تغيير الحالة'))) {
       _after();
     }
   }
@@ -108,13 +109,13 @@ class _BulkManageScreenState extends ConsumerState<BulkManageScreen> {
   Future<void> _edit(Map<String, dynamic> r) async {
     final v = await promptText(
       context,
-      'تعديل ${_section.single}',
+      tr('تعديل {0}', [_section.single]),
       initial: (r[_section.titleField] ?? '') as String,
       multiline: _section.table == 'notes',
     );
     if (v == null || !mounted) return;
     if (await runAction(context, () => ref.read(sectionRepoProvider).rename(_section.table, r['id'] as String, _section.titleField, v),
-        success: 'حُفظ التعديل')) {
+        success: tr('حُفظ التعديل'))) {
       refreshSections(ref);
     }
   }
@@ -128,8 +129,8 @@ class _BulkManageScreenState extends ConsumerState<BulkManageScreen> {
 
     return Scaffold(
       appBar: sectionAppBar(
-        'إدارة البيانات',
-        subtitle: n > 0 ? 'محدد $n من ${all.length}' : '${all.length} ${_section.label}',
+        tr('إدارة البيانات'),
+        subtitle: n > 0 ? tr('محدد {0} من {1}', [n, all.length]) : '${all.length} ${_section.label}',
         actions: [
           TextButton(
             onPressed: all.isEmpty
@@ -143,7 +144,7 @@ class _BulkManageScreenState extends ConsumerState<BulkManageScreen> {
                           ..addAll(all.map((r) => r['id'] as String));
                       }
                     }),
-            child: Text(n > 0 && n == all.length ? 'إلغاء التحديد' : 'تحديد الكل'),
+            child: Text(n > 0 && n == all.length ? tr('إلغاء التحديد') : tr('تحديد الكل')),
           ),
         ],
       ),
@@ -153,24 +154,24 @@ class _BulkManageScreenState extends ConsumerState<BulkManageScreen> {
               child: Container(
                 margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: AppColors.ink, borderRadius: BorderRadius.circular(18)),
+                decoration: BoxDecoration(color: AppColors.hero, borderRadius: BorderRadius.circular(18)),
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text('$n محدد', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                      child: Text(tr('{0} محدد', [n]), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                     ),
                     if (_section.statuses.isNotEmpty)
                       TextButton(
                         style: TextButton.styleFrom(foregroundColor: Colors.white),
                         onPressed: _changeStatus,
-                        child: const Text('تغيير الحالة'),
+                        child: Text(tr('تغيير الحالة')),
                       ),
                     const SizedBox(width: 6),
                     if (canDelete)
                     FilledButton(
-                      style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC2410C), minimumSize: const Size(0, 40)),
+                      style: FilledButton.styleFrom(backgroundColor: AppColors.danger, minimumSize: const Size(0, 40)),
                       onPressed: _delete,
-                      child: const Text('حذف'),
+                      child: Text(tr('حذف')),
                     ),
                   ],
                 ),
@@ -192,8 +193,8 @@ class _BulkManageScreenState extends ConsumerState<BulkManageScreen> {
                   label: Text(s.label),
                   selected: sel,
                   showCheckmark: false,
-                  selectedColor: AppColors.ink,
-                  labelStyle: TextStyle(color: sel ? Colors.white : AppColors.ink),
+                  selectedColor: AppColors.inkBlock,
+                  labelStyle: TextStyle(color: sel ? AppColors.onInkBlock : AppColors.ink),
                   onSelected: (_) => setState(() {
                     _section = s;
                     _selected.clear();
@@ -207,14 +208,14 @@ class _BulkManageScreenState extends ConsumerState<BulkManageScreen> {
             value: rows,
             onRetry: () => ref.invalidate(manageRowsProvider(_section.table)),
             builder: (list) => list.isEmpty
-                ? const EmptyState('لا توجد بيانات هنا')
+                ? EmptyState(tr('لا توجد بيانات هنا'))
                 : CardBox(
                     radius: 16,
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Column(
                       children: [
                         for (var i = 0; i < list.length; i++) ...[
-                          if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                          if (i > 0) Divider(height: 1, color: AppColors.divider),
                           Row(
                             children: [
                               Checkbox(
@@ -234,15 +235,15 @@ class _BulkManageScreenState extends ConsumerState<BulkManageScreen> {
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                                      Text(_meta(list[i]), style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                                      Text(_meta(list[i]), style: TextStyle(fontSize: 12, color: AppColors.muted)),
                                     ],
                                   ),
                                 ),
                               ),
                               IconButton(
-                                tooltip: 'تعديل',
+                                tooltip: tr('تعديل'),
                                 onPressed: () => _edit(list[i]),
-                                icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.subtle),
+                                icon: Icon(Icons.edit_outlined, size: 18, color: AppColors.subtle),
                               ),
                             ],
                           ),

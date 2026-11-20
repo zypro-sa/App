@@ -2,6 +2,7 @@
 import 'package:flutter/widgets.dart' show StringCharacters;
 
 import '../core/permissions.dart';
+import '../core/i18n.dart';
 
 enum RequestStatus {
   newRequest('new', 'جديد'),
@@ -11,9 +12,10 @@ enum RequestStatus {
   closed('closed', 'مغلق'),
   cancelled('cancelled', 'ملغى');
 
-  const RequestStatus(this.db, this.label);
+  const RequestStatus(this.db, this.labelAr);
   final String db;
-  final String label;
+  final String labelAr;
+  String get label => tr(labelAr);
 
   bool get isOpen => this != closed && this != cancelled;
 
@@ -27,9 +29,10 @@ enum Priority {
   high('high', 'عالية'),
   urgent('urgent', 'عاجلة');
 
-  const Priority(this.db, this.label);
+  const Priority(this.db, this.labelAr);
   final String db;
-  final String label;
+  final String labelAr;
+  String get label => tr(labelAr);
 
   static Priority from(String? v) =>
       values.firstWhere((e) => e.db == v, orElse: () => medium);
@@ -40,9 +43,10 @@ enum TaskStatus {
   inProgress('in_progress', 'قيد التنفيذ'),
   done('done', 'منجزة');
 
-  const TaskStatus(this.db, this.label);
+  const TaskStatus(this.db, this.labelAr);
   final String db;
-  final String label;
+  final String labelAr;
+  String get label => tr(labelAr);
 
   static TaskStatus from(String? v) =>
       values.firstWhere((e) => e.db == v, orElse: () => todo);
@@ -53,9 +57,10 @@ enum MeetingType {
   online('online', 'عن بُعد'),
   call('call', 'مكالمة');
 
-  const MeetingType(this.db, this.label);
+  const MeetingType(this.db, this.labelAr);
   final String db;
-  final String label;
+  final String labelAr;
+  String get label => tr(labelAr);
 
   static MeetingType from(String? v) =>
       values.firstWhere((e) => e.db == v, orElse: () => inPerson);
@@ -65,9 +70,10 @@ enum FollowupDirection {
   promised('promised', 'وعدتُ بها'),
   waiting('waiting', 'أنتظرها');
 
-  const FollowupDirection(this.db, this.label);
+  const FollowupDirection(this.db, this.labelAr);
   final String db;
-  final String label;
+  final String labelAr;
+  String get label => tr(labelAr);
 
   static FollowupDirection from(String? v) =>
       values.firstWhere((e) => e.db == v, orElse: () => promised);
@@ -78,9 +84,10 @@ enum UserRole {
   manager('manager', 'مدير'),
   employee('employee', 'موظف');
 
-  const UserRole(this.db, this.label);
+  const UserRole(this.db, this.labelAr);
   final String db;
-  final String label;
+  final String labelAr;
+  String get label => tr(labelAr);
 
   static UserRole from(String? v) =>
       values.firstWhere((e) => e.db == v, orElse: () => employee);
@@ -93,18 +100,19 @@ String? _nested(dynamic v, String key) =>
     v is Map ? v[key]?.toString() : null;
 
 class Profile {
-  Profile({required this.id, required this.name, required this.role, this.jobTitle, this.permissions = const {}});
+  Profile({required this.id, required this.name, required this.role, this.jobTitle, this.permissions = const {}, this.locale});
 
   final String id;
   final String name;
   final UserRole role;
   final String? jobTitle;
   final Map<String, dynamic> permissions;
+  final String? locale; // لغة العضو: ar | en
 
   /// هل يملك هذه الصلاحية؟ (انظر core/permissions.dart)
   bool can(String key) => Permissions.effective(role, permissions, key);
 
-  String get initial => name.isEmpty ? '؟' : name.characters.first;
+  String get initial => name.isEmpty ? tr('؟') : name.characters.first;
 
   factory Profile.fromMap(Map<String, dynamic> m) => Profile(
         id: m['id'] as String,
@@ -112,6 +120,7 @@ class Profile {
         role: UserRole.from(m['role'] as String?),
         jobTitle: m['job_title'] as String?,
         permissions: Map<String, dynamic>.from((m['permissions'] ?? const {}) as Map),
+        locale: m['locale'] as String?,
       );
 }
 
@@ -318,7 +327,7 @@ class Client {
   final String? sector;
   final String? city;
 
-  String get initial => name.isEmpty ? '؟' : name.characters.first;
+  String get initial => name.isEmpty ? tr('؟') : name.characters.first;
 
   factory Client.fromMap(Map<String, dynamic> m) => Client(
         id: m['id'] as String,

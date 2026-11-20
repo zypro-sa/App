@@ -8,6 +8,7 @@ import '../../data/section_models.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/forms.dart';
+import '../../core/i18n.dart';
 
 /// مركز الإشعارات
 class NotificationsScreen extends ConsumerWidget {
@@ -31,23 +32,23 @@ class NotificationsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: sectionAppBar(
-        'الإشعارات',
-        subtitle: unread > 0 ? '$unread غير مقروءة' : 'لا جديد',
+        tr('الإشعارات'),
+        subtitle: unread > 0 ? tr('{0} غير مقروءة', [unread]) : tr('لا جديد'),
         actions: [
           IconButton(
-            tooltip: 'إعدادات الإشعارات',
+            tooltip: tr('إعدادات الإشعارات'),
             onPressed: () => context.go('/more/notifications'),
             icon: const Icon(Icons.tune),
           ),
           PopupMenuButton<String>(
-            tooltip: 'خيارات',
+            tooltip: tr('خيارات'),
             onSelected: (v) async {
               final action = v == 'read' ? repo.markAllNotificationsRead : repo.clearReadNotifications;
               if (await runAction(context, action)) ref.invalidate(notificationsProvider);
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'read', child: Text('تعليم الكل كمقروء')),
-              PopupMenuItem(value: 'clear', child: Text('حذف المقروءة')),
+            itemBuilder: (_) => [
+              PopupMenuItem(value: 'read', child: Text(tr('تعليم الكل كمقروء'))),
+              PopupMenuItem(value: 'clear', child: Text(tr('حذف المقروءة'))),
             ],
           ),
         ],
@@ -62,7 +63,7 @@ class NotificationsScreen extends ConsumerWidget {
               onRetry: () => ref.invalidate(notificationsProvider),
               builder: (list) {
                 if (list.isEmpty) {
-                  return const EmptyState('لا توجد إشعارات بعد.\nستظهر هنا التذكيرات والإسنادات الجديدة.',
+                  return EmptyState(tr('لا توجد إشعارات بعد.\nستظهر هنا التذكيرات والإسنادات الجديدة.'),
                       icon: Icons.notifications_none);
                 }
                 return CardBox(
@@ -71,7 +72,7 @@ class NotificationsScreen extends ConsumerWidget {
                   child: Column(
                     children: [
                       for (var i = 0; i < list.length; i++) ...[
-                        if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                        if (i > 0) Divider(height: 1, color: AppColors.divider),
                         _NotificationTile(list[i]),
                       ],
                     ],
@@ -93,7 +94,7 @@ class _NotificationTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Material(
-      color: n.isRead ? Colors.white : AppColors.primarySoft.withValues(alpha: 0.55),
+      color: n.isRead ? AppColors.surface : AppColors.primarySoft.withValues(alpha: 0.55),
       child: InkWell(
         onTap: () async {
           if (!n.isRead) {
@@ -125,10 +126,10 @@ class _NotificationTile extends ConsumerWidget {
                     Text(n.title,
                         style: TextStyle(fontSize: 14, fontWeight: n.isRead ? FontWeight.w500 : FontWeight.w700)),
                     if (n.body != null && n.body!.isNotEmpty)
-                      Text(n.body!, style: const TextStyle(fontSize: 13, color: AppColors.subtle, height: 1.5)),
+                      Text(n.body!, style: TextStyle(fontSize: 13, color: AppColors.subtle, height: 1.5)),
                     const SizedBox(height: 2),
                     Text('${relativeDay(n.createdAt)} · ${formatTime(n.createdAt)}',
-                        style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                        style: TextStyle(fontSize: 11, color: AppColors.muted)),
                   ],
                 ),
               ),
@@ -137,7 +138,7 @@ class _NotificationTile extends ConsumerWidget {
                   margin: const EdgeInsets.only(top: 6),
                   width: 8,
                   height: 8,
-                  decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
                 ),
             ],
           ),

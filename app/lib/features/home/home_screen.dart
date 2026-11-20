@@ -8,6 +8,8 @@ import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
+import '../../widgets/display_toggles.dart';
+import '../../core/i18n.dart';
 
 /// ١ · لوحة اليوم
 class HomeScreen extends ConsumerWidget {
@@ -46,17 +48,32 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Image.asset(AppAssets.wordmark, height: 26, semanticLabel: 'Zypro'),
+            const Spacer(),
+            const DisplayToggles(),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _greetingRow(context),
+      ],
+    );
+  }
+
+  Widget _greetingRow(BuildContext context) {
     return Row(
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Image.asset('assets/brand/zypro_wordmark.png', height: 26, semanticLabel: 'Zypro'),
-              const SizedBox(height: 6),
-              Text(formatDay(DateTime.now()), style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+              Text(formatDay(DateTime.now()), style: TextStyle(fontSize: 13, color: AppColors.muted)),
               Text(
-                '${greeting()}، ${profile?.name ?? ''}',
+                tr('{0}، {1}', [greeting(), profile?.name ?? '']),
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -64,7 +81,7 @@ class _Header extends StatelessWidget {
           ),
         ),
         IconButton.outlined(
-          tooltip: 'الإشعارات',
+          tooltip: tr('الإشعارات'),
           onPressed: () => context.go('/home/notifications'),
           icon: Consumer(
             builder: (_, ref, __) {
@@ -72,15 +89,15 @@ class _Header extends StatelessWidget {
               return Badge(
                 isLabelVisible: unread > 0,
                 backgroundColor: AppColors.accent,
-                textColor: AppColors.ink,
+                textColor: AppColors.onAccent,
                 label: Text(unread > 9 ? '+9' : '$unread'),
                 child: const Icon(Icons.notifications_none),
               );
             },
           ),
           style: IconButton.styleFrom(
-            backgroundColor: Colors.white,
-            side: const BorderSide(color: AppColors.line),
+            backgroundColor: AppColors.surface,
+            side: BorderSide(color: AppColors.line),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             fixedSize: const Size(44, 44),
           ),
@@ -88,7 +105,7 @@ class _Header extends StatelessWidget {
         const SizedBox(width: 8),
         GestureDetector(
           onTap: () => context.go('/more'),
-          child: Avatar(profile?.initial ?? '؟', size: 44, fg: AppColors.accent, bg: AppColors.ink, radius: 14),
+          child: Avatar(profile?.initial ?? tr('؟'), size: 44, fg: AppColors.accent, bg: AppColors.hero, radius: 14),
         ),
       ],
     );
@@ -107,14 +124,14 @@ class _Body extends ConsumerWidget {
       children: [
         Row(
           children: [
-            Expanded(child: _Stat(value: s.meetingsToday, label: 'اجتماعات اليوم', onTap: () => context.go('/meetings'))),
+            Expanded(child: _Stat(value: s.meetingsToday, label: tr('اجتماعات اليوم'), onTap: () => context.go('/meetings'))),
             const SizedBox(width: 10),
-            Expanded(child: _Stat(value: s.urgentTasks, label: 'مهام عاجلة', onTap: () => context.go('/tasks'))),
+            Expanded(child: _Stat(value: s.urgentTasks, label: tr('مهام عاجلة'), onTap: () => context.go('/tasks'))),
             const SizedBox(width: 10),
             Expanded(
               child: _Stat(
                 value: s.overdueRequests,
-                label: 'طلبات متأخرة',
+                label: tr('طلبات متأخرة'),
                 alert: s.overdueRequests > 0,
                 onTap: () => context.go('/requests'),
               ),
@@ -126,25 +143,25 @@ class _Body extends ConsumerWidget {
           _NextMeeting(meeting: s.nextMeeting!),
           const SizedBox(height: 16),
         ],
-        SectionHeader('مهام اليوم', onSeeAll: () => context.go('/tasks')),
+        SectionHeader(tr('مهام اليوم'), onSeeAll: () => context.go('/tasks')),
         if (s.todayTasks.isEmpty)
-          const CardBox(child: Text('لا توجد مهام لليوم', style: TextStyle(color: AppColors.muted)))
+          CardBox(child: Text(tr('لا توجد مهام لليوم'), style: TextStyle(color: AppColors.muted)))
         else
           CardBox(
             padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Column(
               children: [
                 for (var i = 0; i < s.todayTasks.length; i++) ...[
-                  if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                  if (i > 0) Divider(height: 1, color: AppColors.divider),
                   _HomeTaskRow(task: s.todayTasks[i]),
                 ],
               ],
             ),
           ),
         const SizedBox(height: 16),
-        SectionHeader('متابعات تنتظرك', onSeeAll: () => context.go('/more/followups')),
+        SectionHeader(tr('متابعات تنتظرك'), onSeeAll: () => context.go('/more/followups')),
         if (s.followups.isEmpty)
-          const CardBox(child: Text('لا توجد متابعات مفتوحة', style: TextStyle(color: AppColors.muted)))
+          CardBox(child: Text(tr('لا توجد متابعات مفتوحة'), style: TextStyle(color: AppColors.muted)))
         else
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,7 +215,7 @@ class _NextMeeting extends StatelessWidget {
     final isToday = dateOnly(m.startAt) == dateOnly(DateTime.now());
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(color: AppColors.hero, borderRadius: BorderRadius.circular(20)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -211,8 +228,8 @@ class _NextMeeting extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  'التالي · ${isToday ? timeUntil(m.startAt) : relativeDay(m.startAt)}',
-                  style: const TextStyle(color: AppColors.ink, fontSize: 12, fontWeight: FontWeight.w700),
+                  tr('التالي · {0}', [isToday ? timeUntil(m.startAt) : relativeDay(m.startAt)]),
+                  style: TextStyle(color: AppColors.onAccent, fontSize: 12, fontWeight: FontWeight.w700),
                 ),
               ),
               const Spacer(),
@@ -233,9 +250,9 @@ class _NextMeeting extends StatelessWidget {
             children: [
               Expanded(
                 child: FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.primary),
+                  style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF34343F)),
                   onPressed: () => context.go('/meetings'),
-                  child: const Text('جدول الأعمال'),
+                  child: Text(tr('جدول الأعمال')),
                 ),
               ),
               if (m.clientId != null) ...[
@@ -247,7 +264,7 @@ class _NextMeeting extends StatelessWidget {
                       foregroundColor: Colors.white,
                     ),
                     onPressed: () => context.go('/more/clients/${m.clientId}'),
-                    child: const Text('ملف العميل'),
+                    child: Text(tr('ملف العميل')),
                   ),
                 ),
               ],
@@ -268,9 +285,9 @@ class _HomeTaskRow extends ConsumerWidget {
     final t = task;
     Widget? trailing;
     if (!t.isDone && (t.priority == Priority.urgent || t.isOverdue)) {
-      trailing = Pill.urgent(t.isOverdue ? 'متأخرة' : 'عاجل');
+      trailing = Pill.urgent(t.isOverdue ? tr('متأخرة') : tr('عاجل'));
     } else if (t.dueAt != null && !t.isDone) {
-      trailing = Text(formatTime(t.dueAt!), style: const TextStyle(fontSize: 12, color: AppColors.muted));
+      trailing = Text(formatTime(t.dueAt!), style: TextStyle(fontSize: 12, color: AppColors.muted));
     }
     return Row(
       children: [
@@ -313,7 +330,7 @@ class _FollowupMini extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${promised ? 'وعدت بالرد' : 'بانتظار رد'} · ${relativeDay(f.dueAt)}',
+            '${promised ? tr('وعدت بالرد') : tr('بانتظار رد')} · ${relativeDay(f.dueAt)}',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,

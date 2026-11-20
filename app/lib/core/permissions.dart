@@ -1,12 +1,16 @@
 import '../data/models.dart' show UserRole;
+import 'i18n.dart';
 
 /// صلاحية واحدة قابلة للتشغيل أو الإيقاف لكل عضو.
 class Permission {
-  const Permission(this.key, this.label, this.description, this.group);
+  const Permission(this.key, this.labelAr, this.descriptionAr, this.groupAr);
   final String key;
-  final String label;
-  final String description;
-  final String group;
+  final String labelAr;
+  String get label => tr(labelAr);
+  final String descriptionAr;
+  final String groupAr;
+  String get description => tr(descriptionAr);
+  String get group => tr(groupAr);
 }
 
 /// قائمة الصلاحيات — تطابق role_default_perm و has_perm في قاعدة البيانات.

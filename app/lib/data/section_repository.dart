@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'models.dart';
 import 'repository.dart';
 import 'section_models.dart';
+import '../core/i18n.dart';
 
 SupabaseClient get _db => Supabase.instance.client;
 String get _uid => _db.auth.currentUser!.id;
@@ -242,6 +243,7 @@ class SectionRepository {
     required String name,
     required UserRole role,
     String? jobTitle,
+    String? locale,
     bool resend = false,
   }) async {
     final res = await _db.functions.invoke('invite-member', body: {
@@ -254,7 +256,12 @@ class SectionRepository {
     });
     final data = res.data;
     if (data is Map && data['error'] != null) throw Exception(data['error']);
+    final userId = data is Map ? data['user_id'] : null;
+    if (locale != null && userId is String) await setMemberLocale(userId, locale);
   }
+
+  Future<void> setMemberLocale(String id, String locale) =>
+      _db.from('profiles').update({'locale': locale}).eq('id', id);
 
   Future<void> setMemberRole(String id, UserRole role) =>
       _db.from('profiles').update({'role': role.db}).eq('id', id);
@@ -296,6 +303,7 @@ class SectionRepository {
   Future<void> createField({
     required ConfigEntity entity,
     required String label,
+    String? labelEn,
     required FieldType type,
     required List<String> options,
     required bool required,
@@ -306,6 +314,7 @@ class SectionRepository {
         'entity': entity.db,
         'key': 'cf_${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}',
         'label': label,
+        'label_en': labelEn,
         'type': type.db,
         'options': options,
         'required': required,
@@ -333,9 +342,9 @@ class SectionRepository {
     return rows.map(StatusLabel.fromMap).toList();
   }
 
-  Future<void> updateStatusLabel(ConfigEntity e, String status, String label, String color) => _db
+  Future<void> updateStatusLabel(ConfigEntity e, String status, String label, String color, {String? labelEn}) => _db
       .from('status_labels')
-      .update({'label': label, 'color': color})
+      .update({'label': label, 'label_en': labelEn, 'color': color})
       .eq('entity', e.db)
       .eq('status', status);
 
@@ -463,8 +472,8 @@ class SectionRepository {
   Future<void> sendTestNotification() => _db.from('notifications').insert({
         'user_id': _uid,
         'type': 'test',
-        'title': 'الإشعارات تعمل ✓',
-        'body': 'هكذا ستصلك التذكيرات من Zypro',
+        'title': tr('الإشعارات تعمل ✓'),
+        'body': tr('هكذا ستصلك التذكيرات من Zypro'),
         'url': '/home',
       });
 

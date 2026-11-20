@@ -1,6 +1,7 @@
 // نماذج المرحلة الثانية: المشاريع، المالية، الملاحظات، الفريق، الإعدادات، السلة، التقارير.
 import '../core/permissions.dart';
 import 'models.dart';
+import '../core/i18n.dart';
 
 DateTime? _ts(dynamic v) => v == null ? null : DateTime.parse(v as String).toLocal();
 DateTime? _d(dynamic v) => v == null ? null : DateTime.parse(v as String);
@@ -15,9 +16,10 @@ enum ProjectStatus {
   completed('completed', 'مكتمل'),
   cancelled('cancelled', 'ملغى');
 
-  const ProjectStatus(this.db, this.label);
+  const ProjectStatus(this.db, this.labelAr);
   final String db;
-  final String label;
+  final String labelAr;
+  String get label => tr(labelAr);
 
   static ProjectStatus from(String? v) =>
       values.firstWhere((e) => e.db == v, orElse: () => planning);
@@ -113,9 +115,10 @@ enum InvoiceStatus {
   overdue('overdue', 'متأخرة'),
   voided('void', 'ملغاة');
 
-  const InvoiceStatus(this.db, this.label);
+  const InvoiceStatus(this.db, this.labelAr);
   final String db;
-  final String label;
+  final String labelAr;
+  String get label => tr(labelAr);
 
   static InvoiceStatus from(String? v) =>
       values.firstWhere((e) => e.db == v, orElse: () => issued);
@@ -224,9 +227,10 @@ enum QuoteStatus {
   rejected('rejected', 'مرفوض'),
   expired('expired', 'منتهٍ');
 
-  const QuoteStatus(this.db, this.label);
+  const QuoteStatus(this.db, this.labelAr);
   final String db;
-  final String label;
+  final String labelAr;
+  String get label => tr(labelAr);
 
   static QuoteStatus from(String? v) =>
       values.firstWhere((e) => e.db == v, orElse: () => draft);
@@ -279,9 +283,10 @@ enum NoteType {
   idea('idea', 'فكرة'),
   call('call', 'مكالمة');
 
-  const NoteType(this.db, this.label);
+  const NoteType(this.db, this.labelAr);
   final String db;
-  final String label;
+  final String labelAr;
+  String get label => tr(labelAr);
 
   static NoteType from(String? v) =>
       values.firstWhere((e) => e.db == v, orElse: () => general);
@@ -327,9 +332,11 @@ class TeamMember {
     required this.openRequests,
     this.jobTitle,
     this.permissions = const {},
+    this.locale = 'ar',
   });
 
   final Map<String, dynamic> permissions;
+  final String locale;
   bool can(String key) => Permissions.effective(role, permissions, key);
   bool isCustomized(String key) =>
       role != UserRole.owner && permissions[key] is bool && permissions[key] != Permissions.roleDefault(role, key);
@@ -344,7 +351,7 @@ class TeamMember {
   final int openRequests;
   final String? jobTitle;
 
-  String get initial => name.isEmpty ? '؟' : name.substring(0, 1);
+  String get initial => name.isEmpty ? tr('؟') : name.substring(0, 1);
 
   factory TeamMember.fromMap(Map<String, dynamic> m) => TeamMember(
         id: m['id'] as String,
@@ -357,6 +364,7 @@ class TeamMember {
         openRequests: _num(m['open_requests']).toInt(),
         jobTitle: m['job_title'] as String?,
         permissions: Map<String, dynamic>.from((m['permissions'] ?? const {}) as Map),
+        locale: m['locale'] == 'en' ? 'en' : 'ar',
       );
 }
 
@@ -368,9 +376,10 @@ enum ConfigEntity {
   client('client', 'العملاء', 'clients'),
   project('project', 'المشاريع', 'projects');
 
-  const ConfigEntity(this.db, this.label, this.table);
+  const ConfigEntity(this.db, this.labelAr, this.table);
   final String db;
-  final String label;
+  final String labelAr;
+  String get label => tr(labelAr);
   final String table;
 
   static ConfigEntity from(String? v) =>
@@ -385,9 +394,10 @@ enum FieldType {
   boolean('bool', 'نعم/لا'),
   money('money', 'مبلغ');
 
-  const FieldType(this.db, this.label);
+  const FieldType(this.db, this.labelAr);
   final String db;
-  final String label;
+  final String labelAr;
+  String get label => tr(labelAr);
 
   static FieldType from(String? v) =>
       values.firstWhere((e) => e.db == v, orElse: () => text);
@@ -398,7 +408,8 @@ class FieldSetting {
     required this.id,
     required this.entity,
     required this.key,
-    required this.label,
+    required this.labelAr,
+    this.labelEn,
     required this.type,
     required this.options,
     required this.isSystem,
@@ -412,7 +423,9 @@ class FieldSetting {
   final String id;
   final ConfigEntity entity;
   final String key;
-  final String label;
+  final String labelAr;
+  final String? labelEn;
+  String get label => pickLang(labelAr, labelEn);
   final FieldType type;
   final List<String> options;
   final bool isSystem;
@@ -426,8 +439,8 @@ class FieldSetting {
 
   String get meta {
     final parts = <String>[type.label];
-    if (type == FieldType.list && options.isNotEmpty) parts.add('${options.length} خيارات');
-    parts.add(isLocked ? 'أساسي' : (isSystem ? 'افتراضي' : 'مخصص'));
+    if (type == FieldType.list && options.isNotEmpty) parts.add(tr('{0} خيارات', [options.length]));
+    parts.add(isLocked ? tr('أساسي') : (isSystem ? tr('افتراضي') : tr('مخصص')));
     return parts.join(' · ');
   }
 
@@ -435,7 +448,8 @@ class FieldSetting {
         id: m['id'] as String,
         entity: ConfigEntity.from(m['entity'] as String?),
         key: m['key'] as String,
-        label: m['label'] as String,
+        labelAr: m['label'] as String,
+        labelEn: m['label_en'] as String?,
         type: FieldType.from(m['type'] as String?),
         options: ((m['options'] ?? []) as List).map((e) => e.toString()).toList(),
         isSystem: (m['is_system'] ?? false) as bool,
@@ -461,14 +475,17 @@ class FieldConfig {
 }
 
 class StatusLabel {
-  StatusLabel({required this.status, required this.label, required this.color});
+  StatusLabel({required this.status, required this.labelAr, this.labelEn, required this.color});
   final String status;
-  final String label;
+  final String labelAr;
+  final String? labelEn;
+  String get label => pickLang(labelAr, labelEn);
   final String color; // info | neutral | waiting | done | urgent
 
   factory StatusLabel.fromMap(Map<String, dynamic> m) => StatusLabel(
         status: m['status'] as String,
-        label: m['label'] as String,
+        labelAr: m['label'] as String,
+        labelEn: m['label_en'] as String?,
         color: (m['color'] ?? 'neutral') as String,
       );
 }
@@ -497,16 +514,16 @@ class TrashItem {
     'invoice': 'invoices',
   };
 
-  static const labels = {
-    'request': 'الطلبات',
-    'task': 'المهام',
-    'meeting': 'الاجتماعات',
-    'client': 'العملاء',
-    'project': 'المشاريع',
-    'note': 'الملاحظات',
-    'followup': 'المتابعات',
-    'quote': 'عروض الأسعار',
-    'invoice': 'الفواتير',
+  static Map<String, String> get labels => {
+    'request': tr('الطلبات'),
+    'task': tr('المهام'),
+    'meeting': tr('الاجتماعات'),
+    'client': tr('العملاء'),
+    'project': tr('المشاريع'),
+    'note': tr('الملاحظات'),
+    'followup': tr('المتابعات'),
+    'quote': tr('عروض الأسعار'),
+    'invoice': tr('الفواتير'),
   };
 
   String get table => tables[entity]!;
@@ -673,12 +690,12 @@ class NotificationItem {
 
 /// أنواع التذكيرات التي يختارها العضو.
 class NotificationKinds {
-  static const all = <(String, String, String)>[
-    ('meeting_soon', 'اجتماع قريب', 'قبل الاجتماع بحوالي ٣٠ دقيقة'),
-    ('task_due', 'ملخص المهام صباحًا', 'كل يوم ٨ ص: مهام اليوم والمتأخرة'),
-    ('request_overdue', 'الطلبات المتأخرة', 'كل يوم ٩ ص للطلبات التي تجاوزت موعدها'),
-    ('followup_due', 'المتابعات المستحقة', 'عند حلول موعد أي متابعة'),
-    ('assigned', 'إسناد جديد', 'فور إسناد مهمة أو طلب إليك'),
-    ('quote_no_reply', 'عروض أسعار بلا رد', 'بعد ٣ أيام من الإرسال (لصلاحية المالية)'),
+  static List<(String, String, String)> get all => [
+    ('meeting_soon', tr('اجتماع قريب'), tr('قبل الاجتماع بحوالي ٣٠ دقيقة')),
+    ('task_due', tr('ملخص المهام صباحًا'), tr('كل يوم ٨ ص: مهام اليوم والمتأخرة')),
+    ('request_overdue', tr('الطلبات المتأخرة'), tr('كل يوم ٩ ص للطلبات التي تجاوزت موعدها')),
+    ('followup_due', tr('المتابعات المستحقة'), tr('عند حلول موعد أي متابعة')),
+    ('assigned', tr('إسناد جديد'), tr('فور إسناد مهمة أو طلب إليك')),
+    ('quote_no_reply', tr('عروض أسعار بلا رد'), tr('بعد ٣ أيام من الإرسال (لصلاحية المالية)')),
   ];
 }

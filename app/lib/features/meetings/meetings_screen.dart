@@ -7,6 +7,7 @@ import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../widgets/common.dart';
+import '../../core/i18n.dart';
 
 /// ٤ · الاجتماعات
 class MeetingsScreen extends ConsumerStatefulWidget {
@@ -47,16 +48,16 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('الاجتماعات', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
+            Text(tr('الاجتماعات'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
             Text(
-              '${DateFormat('MMMM y', 'ar').format(_day)}'
-              '${count != null ? ' · $count ${isToday ? 'اجتماعات اليوم' : 'اجتماعات'}' : ''}',
-              style: const TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w400),
+              '${DateFormat('MMMM y', L.code).format(_day)}'
+              '${count != null ? ' · $count ${isToday ? tr('اجتماعات اليوم') : tr('اجتماعات')}' : ''}',
+              style: TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w400),
             ),
           ],
         ),
         actions: [
-          IconButton(tooltip: 'اختيار تاريخ', onPressed: _pickMonthDay, icon: const Icon(Icons.calendar_month_outlined)),
+          IconButton(tooltip: tr('اختيار تاريخ'), onPressed: _pickMonthDay, icon: const Icon(Icons.calendar_month_outlined)),
           const SizedBox(width: 8),
         ],
       ),
@@ -83,7 +84,7 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
               onRetry: () => ref.invalidate(meetingsProvider(_day)),
               builder: (list) {
                 if (list.isEmpty) {
-                  return const EmptyState('لا توجد اجتماعات في هذا اليوم', icon: Icons.event_available_outlined);
+                  return EmptyState(tr('لا توجد اجتماعات في هذا اليوم'), icon: Icons.event_available_outlined);
                 }
                 final now = DateTime.now();
                 final nextIndex = list.indexWhere((m) => m.endAt.isAfter(now));
@@ -117,7 +118,7 @@ class _DayChip extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: Material(
-        color: selected ? AppColors.primary : Colors.transparent,
+        color: selected ? AppColors.inkBlock : Colors.transparent,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -128,13 +129,13 @@ class _DayChip extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(formatWeekdayShort(day),
-                    style: TextStyle(fontSize: 11, color: selected ? Colors.white : AppColors.muted)),
+                    style: TextStyle(fontSize: 11, color: selected ? AppColors.onInkBlock : AppColors.muted)),
                 Text(
                   '${day.day}',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                    color: selected ? Colors.white : (weekend ? const Color(0xFF9AA2AE) : AppColors.ink),
+                    color: selected ? AppColors.onInkBlock : (weekend ? AppColors.faint : AppColors.ink),
                   ),
                 ),
               ],
@@ -162,7 +163,7 @@ class _TimelineRow extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.only(top: 14),
             child: Text(formatTime(meeting.startAt),
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.subtle)),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.subtle)),
           ),
         ),
         const SizedBox(width: 8),
@@ -187,11 +188,11 @@ class _MeetingCardCompact extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             [
-              '${m.durationMinutes} دقيقة',
+              tr('{0} دقيقة', [m.durationMinutes]),
               m.type.label,
               if (m.clientName != null) m.clientName!,
             ].join(' · '),
-            style: const TextStyle(fontSize: 12, color: AppColors.muted),
+            style: TextStyle(fontSize: 12, color: AppColors.muted),
           ),
         ],
       ),
@@ -210,7 +211,7 @@ class _MeetingCardExpanded extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.primary, width: 2),
       ),
@@ -219,16 +220,16 @@ class _MeetingCardExpanded extends StatelessWidget {
         children: [
           Row(
             children: [
-              Pill.info(started ? 'جارٍ الآن' : timeUntil(m.startAt)),
+              Pill.info(started ? tr('جارٍ الآن') : timeUntil(m.startAt)),
               const Spacer(),
-              Text('${m.durationMinutes} دقيقة · ${m.type.label}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+              Text(tr('{0} دقيقة · {1}', [m.durationMinutes, m.type.label]),
+                  style: TextStyle(fontSize: 12, color: AppColors.muted)),
             ],
           ),
           const SizedBox(height: 10),
           Text(m.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           if (m.clientName != null)
-            Text(m.clientName!, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+            Text(m.clientName!, style: TextStyle(fontSize: 13, color: AppColors.muted)),
           if (m.agenda.isNotEmpty) ...[
             const SizedBox(height: 10),
             Container(
@@ -238,7 +239,7 @@ class _MeetingCardExpanded extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('جدول الأعمال',
+                  Text(tr('جدول الأعمال'),
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.subtle)),
                   const SizedBox(height: 6),
                   for (var i = 0; i < m.agenda.length; i++)
@@ -254,9 +255,9 @@ class _MeetingCardExpanded extends StatelessWidget {
             const SizedBox(height: 10),
             Row(
               children: [
-                const Icon(Icons.group_outlined, size: 18, color: AppColors.muted),
+                Icon(Icons.group_outlined, size: 18, color: AppColors.muted),
                 const SizedBox(width: 6),
-                Text('${m.attendeeCount} حضور', style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                Text(tr('{0} حضور', [m.attendeeCount]), style: TextStyle(fontSize: 12, color: AppColors.muted)),
               ],
             ),
           ],
@@ -266,14 +267,14 @@ class _MeetingCardExpanded extends StatelessWidget {
               Expanded(
                 child: FilledButton(
                   onPressed: () => _openMinutes(context, m),
-                  child: const Text('كتابة المحضر'),
+                  child: Text(tr('كتابة المحضر')),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => showSnack(context, 'تحويل القرارات لمهام: في المرحلة القادمة'),
-                  child: const Text('تحويل القرارات لمهام', textAlign: TextAlign.center),
+                  onPressed: () => showSnack(context, tr('تحويل القرارات لمهام: في المرحلة القادمة')),
+                  child: Text(tr('تحويل القرارات لمهام'), textAlign: TextAlign.center),
                 ),
               ),
             ],
@@ -289,7 +290,7 @@ Future<void> _openMinutes(BuildContext context, Meeting m) {
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    backgroundColor: Colors.white,
+    backgroundColor: AppColors.surface,
     builder: (_) => _MinutesSheet(meeting: m),
   );
 }
@@ -320,10 +321,10 @@ class _MinutesSheetState extends ConsumerState<_MinutesSheet> {
       if (mounted) {
         final messenger = ScaffoldMessenger.of(context);
         Navigator.pop(context);
-        messenger.showSnackBar(const SnackBar(content: Text('تم حفظ المحضر')));
+        messenger.showSnackBar(SnackBar(content: Text(tr('تم حفظ المحضر'))));
       }
     } catch (e) {
-      if (mounted) showSnack(context, 'تعذّر الحفظ: $e');
+      if (mounted) showSnack(context, tr('تعذّر الحفظ: {0}', [e]));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -337,16 +338,16 @@ class _MinutesSheetState extends ConsumerState<_MinutesSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('محضر: ${widget.meeting.title}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          Text(tr('محضر: {0}', [widget.meeting.title]), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           TextField(
             controller: _controller,
             minLines: 6,
             maxLines: 12,
-            decoration: const InputDecoration(hintText: 'ما الذي نوقش؟ وما القرارات؟'),
+            decoration: InputDecoration(hintText: tr('ما الذي نوقش؟ وما القرارات؟')),
           ),
           const SizedBox(height: 16),
-          FilledButton(onPressed: _saving ? null : _save, child: const Text('حفظ المحضر')),
+          FilledButton(onPressed: _saving ? null : _save, child: Text(tr('حفظ المحضر'))),
         ],
       ),
     );

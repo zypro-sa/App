@@ -11,6 +11,7 @@ import '../../data/section_models.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/forms.dart';
+import '../../core/i18n.dart';
 
 /// ١١ · المالية (للمالك فقط)
 class FinanceScreen extends ConsumerStatefulWidget {
@@ -28,8 +29,8 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final me = ref.watch(profileProvider).valueOrNull;
     if (me != null && !me.can(Permissions.financeManage)) {
       return Scaffold(
-        appBar: sectionAppBar('المالية'),
-        body: const EmptyState('ليست لديك صلاحية المالية', icon: Icons.lock_outline),
+        appBar: sectionAppBar(tr('المالية')),
+        body: EmptyState(tr('ليست لديك صلاحية المالية'), icon: Icons.lock_outline),
       );
     }
     final summary = ref.watch(financeSummaryProvider);
@@ -39,12 +40,12 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
     return Scaffold(
       appBar: sectionAppBar(
-        'المالية',
-        subtitle: DateFormat('MMMM y', 'ar').format(now),
+        tr('المالية'),
+        subtitle: DateFormat('MMMM y', L.code).format(now),
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 14),
-            child: Pill.neutral('صلاحية خاصة'),
+            child: Pill.neutral(tr('صلاحية خاصة')),
           ),
         ],
       ),
@@ -62,8 +63,8 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
             SegmentedButton<bool>(
               showSelectedIcon: false,
               segments: [
-                ButtonSegment(value: false, label: Text('الفواتير ${invoices.valueOrNull?.length ?? ''}')),
-                ButtonSegment(value: true, label: Text('عروض الأسعار ${quotes.valueOrNull?.length ?? ''}')),
+                ButtonSegment(value: false, label: Text(tr('الفواتير {0}', [invoices.valueOrNull?.length ?? '']))),
+                ButtonSegment(value: true, label: Text(tr('عروض الأسعار {0}', [quotes.valueOrNull?.length ?? '']))),
               ],
               selected: {_quotes},
               onSelectionChanged: (s) => setState(() => _quotes = s.first),
@@ -74,7 +75,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                 value: invoices,
                 onRetry: () => ref.invalidate(invoicesProvider),
                 builder: (list) => list.isEmpty
-                    ? const EmptyState('لا توجد فواتير بعد', icon: Icons.receipt_long_outlined)
+                    ? EmptyState(tr('لا توجد فواتير بعد'), icon: Icons.receipt_long_outlined)
                     : _InvoiceList(list),
               )
             else
@@ -82,7 +83,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                 value: quotes,
                 onRetry: () => ref.invalidate(quotesProvider),
                 builder: (list) => list.isEmpty
-                    ? const EmptyState('لا توجد عروض أسعار بعد', icon: Icons.request_quote_outlined)
+                    ? EmptyState(tr('لا توجد عروض أسعار بعد'), icon: Icons.request_quote_outlined)
                     : _QuoteList(list),
               ),
             const SizedBox(height: 14),
@@ -92,7 +93,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                   Expanded(
                     child: FilledButton(
                       onPressed: () => _recordPayment(context, ref, invoices.valueOrNull ?? const []),
-                      child: const Text('تسجيل دفعة'),
+                      child: Text(tr('تسجيل دفعة')),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -100,14 +101,14 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => showFormSheet(context, _NewDocSheet(quote: _quotes)),
-                    child: Text(_quotes ? 'عرض سعر جديد' : 'فاتورة جديدة'),
+                    child: Text(_quotes ? tr('عرض سعر جديد') : tr('فاتورة جديدة')),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            const Text(
-              'الفوترة الرسمية تبقى في نظام المحاسبة · هنا للمتابعة فقط',
+            Text(
+              tr('الفوترة الرسمية تبقى في نظام المحاسبة · هنا للمتابعة فقط'),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: AppColors.muted),
             ),
@@ -123,25 +124,25 @@ Future<void> _recordPayment(BuildContext context, WidgetRef ref, List<Invoice> i
   var target = invoice;
   if (target == null) {
     if (open.isEmpty) {
-      showSnack(context, 'لا توجد فواتير مفتوحة');
+      showSnack(context, tr('لا توجد فواتير مفتوحة'));
       return;
     }
     target = await showModalBottomSheet<Invoice>(
       context: context,
       showDragHandle: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       builder: (ctx) => SafeArea(
         child: ListView(
           shrinkWrap: true,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text('اختر الفاتورة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              child: Text(tr('اختر الفاتورة'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             ),
             for (final i in open)
               ListTile(
                 title: Text('${i.number} · ${i.clientName ?? ''}'),
-                subtitle: Text('المتبقي ${money(i.remaining)}'),
+                subtitle: Text(tr('المتبقي {0}', [money(i.remaining)])),
                 onTap: () => Navigator.pop(ctx, i),
               ),
           ],
@@ -150,10 +151,10 @@ Future<void> _recordPayment(BuildContext context, WidgetRef ref, List<Invoice> i
     );
   }
   if (target == null || !context.mounted) return;
-  final amount = await promptNumber(context, 'دفعة على ${target.number}', label: 'المبلغ (المتبقي ${moneyShort(target.remaining)})');
+  final amount = await promptNumber(context, tr('دفعة على {0}', [target.number]), label: tr('المبلغ (المتبقي {0})', [moneyShort(target.remaining)]));
   if (amount == null || amount <= 0 || !context.mounted) return;
   final inv = target;
-  if (await runAction(context, () => ref.read(sectionRepoProvider).recordPayment(inv.id, amount), success: 'سُجّلت الدفعة')) {
+  if (await runAction(context, () => ref.read(sectionRepoProvider).recordPayment(inv.id, amount), success: tr('سُجّلت الدفعة'))) {
     refreshSections(ref);
   }
 }
@@ -166,18 +167,18 @@ class _SummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.ink, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(color: AppColors.hero, borderRadius: BorderRadius.circular(20)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('مستحق التحصيل', style: TextStyle(fontSize: 13, color: Color(0xFFC9CED6))),
+          Text(tr('مستحق التحصيل'), style: TextStyle(fontSize: 13, color: Color(0xFFC9CED6))),
           Text(money(s.due), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: Colors.white)),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _mini('متأخر', money(s.overdue), const Color(0xFFF7B79A))),
+              Expanded(child: _mini(tr('متأخر'), money(s.overdue), const Color(0xFFF7B79A))),
               const SizedBox(width: 10),
-              Expanded(child: _mini('محصّل هذا الشهر', money(s.collectedThisMonth), const Color(0xFF9FE0B8))),
+              Expanded(child: _mini(tr('محصّل هذا الشهر'), money(s.collectedThisMonth), const Color(0xFF9FE0B8))),
             ],
           ),
         ],
@@ -213,7 +214,7 @@ class _InvoiceList extends ConsumerWidget {
       child: Column(
         children: [
           for (var i = 0; i < list.length; i++) ...[
-            if (i > 0) const Divider(height: 1, color: AppColors.divider),
+            if (i > 0) Divider(height: 1, color: AppColors.divider),
             InkWell(
               onTap: () => showFormSheet(context, InvoiceSheet(invoiceId: list[i].id)),
               child: Padding(
@@ -254,23 +255,23 @@ class _InvoiceList extends ConsumerWidget {
   }
 
   String _subtitle(Invoice i) {
-    if (i.isVoid) return 'ملغاة · لا تُحسب في المستحق';
+    if (i.isVoid) return tr('ملغاة · لا تُحسب في المستحق');
     final parts = <String>[];
-    if (i.returned > 0) parts.add('مرتجع ${moneyShort(i.returned)}');
-    if (i.status == InvoiceStatus.paid) return [...parts, 'مدفوعة بالكامل'].join(' · ');
-    if (i.paid > 0) parts.add('دُفع ${moneyShort(i.paid)} · المتبقي ${moneyShort(i.remaining)}');
+    if (i.returned > 0) parts.add(tr('مرتجع {0}', [moneyShort(i.returned)]));
+    if (i.status == InvoiceStatus.paid) return [...parts, tr('مدفوعة بالكامل')].join(' · ');
+    if (i.paid > 0) parts.add(tr('دُفع {0} · المتبقي {1}', [moneyShort(i.paid), moneyShort(i.remaining)]));
     if (i.isOverdue) {
-      parts.add('متأخرة ${DateTime.now().difference(i.dueDate).inDays} يومًا');
+      parts.add(tr('متأخرة {0} يومًا', [DateTime.now().difference(i.dueDate).inDays]));
     } else {
-      parts.add('تستحق ${formatShortDate(i.dueDate)}');
+      parts.add(tr('تستحق {0}', [formatShortDate(i.dueDate)]));
     }
     return parts.join(' · ');
   }
 
   Pill _pill(Invoice i) {
-    if (i.isVoid) return Pill.neutral('ملغاة');
-    if (i.isOverdue && i.paid > 0) return Pill.urgent('جزئية · متأخرة');
-    if (i.isOverdue) return Pill.urgent('متأخرة');
+    if (i.isVoid) return Pill.neutral(tr('ملغاة'));
+    if (i.isOverdue && i.paid > 0) return Pill.urgent(tr('جزئية · متأخرة'));
+    if (i.isOverdue) return Pill.urgent(tr('متأخرة'));
     switch (i.status) {
       case InvoiceStatus.paid:
         return Pill.done(i.status.label);
@@ -294,7 +295,7 @@ class _QuoteList extends ConsumerWidget {
       child: Column(
         children: [
           for (var i = 0; i < list.length; i++) ...[
-            if (i > 0) const Divider(height: 1, color: AppColors.divider),
+            if (i > 0) Divider(height: 1, color: AppColors.divider),
             InkWell(
               onTap: () => showFormSheet(context, QuoteSheet(quote: list[i])),
               child: Padding(
@@ -308,15 +309,15 @@ class _QuoteList extends ConsumerWidget {
                         Text('${list[i].number} · ${list[i].clientName ?? ''}',
                             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                         Text(
-                          list[i].sentAt == null ? 'لم يُرسل بعد' : 'أُرسل ${relativeDay(list[i].sentAt!)}',
-                          style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                          list[i].sentAt == null ? tr('لم يُرسل بعد') : tr('أُرسل {0}', [relativeDay(list[i].sentAt!)]),
+                          style: TextStyle(fontSize: 12, color: AppColors.muted),
                         ),
                       ],
                     ),
                   ),
                   Text(moneyShort(list[i].total), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                   PopupMenuButton<QuoteStatus>(
-                    tooltip: 'تغيير الحالة',
+                    tooltip: tr('تغيير الحالة'),
                     onSelected: (s) async {
                       if (await runAction(context, () => ref.read(sectionRepoProvider).setQuoteStatus(list[i].id, s))) {
                         refreshSections(ref);
@@ -370,7 +371,7 @@ class _NewDocSheetState extends ConsumerState<_NewDocSheet> {
 
   Future<void> _save() async {
     if (_clientId == null || _amount == null) {
-      showSnack(context, 'اختر العميل وأدخل المبلغ');
+      showSnack(context, tr('اختر العميل وأدخل المبلغ'));
       return;
     }
     setState(() => _busy = true);
@@ -393,36 +394,36 @@ class _NewDocSheetState extends ConsumerState<_NewDocSheet> {
   Widget build(BuildContext context) {
     final clients = ref.watch(clientsProvider).valueOrNull ?? const <Client>[];
     return SheetBody(
-      title: widget.quote ? 'عرض سعر جديد' : 'فاتورة جديدة',
+      title: widget.quote ? tr('عرض سعر جديد') : tr('فاتورة جديدة'),
       busy: _busy,
       onSubmit: _save,
       children: [
         FormCard(children: [
           FormDropdown<String>(
-            label: 'العميل *',
+            label: tr('العميل *'),
             value: _clientId,
             items: {for (final c in clients) c.id: c.name},
             onChanged: (v) => setState(() => _clientId = v),
           ),
           FormRow(
-            label: widget.quote ? 'المبلغ قبل الضريبة *' : 'الإجمالي شامل الضريبة *',
-            value: _amount == null ? 'أدخل' : money(_amount!),
+            label: widget.quote ? tr('المبلغ قبل الضريبة *') : tr('الإجمالي شامل الضريبة *'),
+            value: _amount == null ? tr('أدخل') : money(_amount!),
             muted: _amount == null,
             onTap: () async {
-              final v = await promptNumber(context, 'المبلغ', label: 'بالريال');
+              final v = await promptNumber(context, tr('المبلغ'), label: tr('بالريال'));
               if (v != null) setState(() => _amount = v);
             },
           ),
           if (widget.quote)
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('إضافة ضريبة ١٥٪', style: TextStyle(fontSize: 14)),
+              title: Text(tr('إضافة ضريبة ١٥٪'), style: TextStyle(fontSize: 14)),
               value: _vat,
               onChanged: (v) => setState(() => _vat = v),
             )
           else
             FormRow(
-              label: 'تاريخ الاستحقاق',
+              label: tr('تاريخ الاستحقاق'),
               value: formatShortDate(_due),
               onTap: () async {
                 final d = await pickDate(context, initial: _due);
@@ -452,7 +453,7 @@ class InvoiceSheet extends ConsumerWidget {
     }
 
     Future<void> save(Map<String, dynamic> changes, {String? success}) async {
-      if (await runAction(context, () => repo.updateInvoice(inv.id, changes), success: success ?? 'حُفظ التعديل')) {
+      if (await runAction(context, () => repo.updateInvoice(inv.id, changes), success: success ?? tr('حُفظ التعديل'))) {
         refreshSections(ref);
       }
     }
@@ -466,29 +467,29 @@ class InvoiceSheet extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Expanded(child: Text('فاتورة ${inv.number}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700))),
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
+                Expanded(child: Text(tr('فاتورة {0}', [inv.number]), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700))),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('إغلاق'))),
               ],
             ),
             const SizedBox(height: 4),
             Text(
               inv.isVoid
-                  ? 'ملغاة'
-                  : 'المدفوع ${money(inv.paid)} · المتبقي ${money(inv.remaining)}',
+                  ? tr('ملغاة')
+                  : tr('المدفوع {0} · المتبقي {1}', [money(inv.paid), money(inv.remaining)]),
               style: TextStyle(fontSize: 13, color: inv.isOverdue ? AppColors.urgent : AppColors.muted, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 14),
             FormCard(children: [
               FormRow(
-                label: 'رقم الفاتورة',
+                label: tr('رقم الفاتورة'),
                 value: inv.number,
                 onTap: () async {
-                  final v = await promptText(context, 'رقم الفاتورة', initial: inv.number);
+                  final v = await promptText(context, tr('رقم الفاتورة'), initial: inv.number);
                   if (v != null) await save({'number': v});
                 },
               ),
               FormDropdown<String>(
-                label: 'العميل',
+                label: tr('العميل'),
                 value: inv.clientId,
                 allowEmpty: false,
                 items: {for (final c in clients) c.id: c.name},
@@ -497,27 +498,27 @@ class InvoiceSheet extends ConsumerWidget {
                 },
               ),
               FormDropdown<String>(
-                label: 'الطلب المرتبط',
+                label: tr('الطلب المرتبط'),
                 value: inv.requestId,
-                emptyLabel: 'بدون',
+                emptyLabel: tr('بدون'),
                 items: {
                   for (final r in (inv.clientId == null
                       ? const <RequestItem>[]
                       : (ref.watch(clientRequestsProvider(inv.clientId!)).valueOrNull ?? const <RequestItem>[])))
                     r.id: '#${r.number} · ${r.title}',
                 },
-                onChanged: (v) => save({'request_id': v}, success: v == null ? 'أُلغي الربط' : 'رُبطت الفاتورة بالطلب'),
+                onChanged: (v) => save({'request_id': v}, success: v == null ? tr('أُلغي الربط') : tr('رُبطت الفاتورة بالطلب')),
               ),
               FormRow(
-                label: inv.returned > 0 ? 'الإجمالي قبل المرتجع' : 'الإجمالي شامل الضريبة',
+                label: inv.returned > 0 ? tr('الإجمالي قبل المرتجع') : tr('الإجمالي شامل الضريبة'),
                 value: money(inv.total),
                 onTap: () async {
-                  final v = await promptNumber(context, 'الإجمالي', label: 'بالريال', initial: inv.total);
+                  final v = await promptNumber(context, tr('الإجمالي'), label: tr('بالريال'), initial: inv.total);
                   if (v != null && v >= 0) await save({'total': v});
                 },
               ),
               FormRow(
-                label: 'تاريخ الإصدار',
+                label: tr('تاريخ الإصدار'),
                 value: formatShortDate(inv.issueDate),
                 onTap: () async {
                   final d = await pickDate(context, initial: inv.issueDate);
@@ -525,7 +526,7 @@ class InvoiceSheet extends ConsumerWidget {
                 },
               ),
               FormRow(
-                label: 'تاريخ الاستحقاق',
+                label: tr('تاريخ الاستحقاق'),
                 value: formatShortDate(inv.dueDate),
                 onTap: () async {
                   final d = await pickDate(context, initial: inv.dueDate);
@@ -533,48 +534,48 @@ class InvoiceSheet extends ConsumerWidget {
                 },
               ),
               FormRow(
-                label: 'الوصف',
-                value: (inv.notes == null || inv.notes!.isEmpty) ? 'أضف وصفًا' : inv.notes!,
+                label: tr('الوصف'),
+                value: (inv.notes == null || inv.notes!.isEmpty) ? tr('أضف وصفًا') : inv.notes!,
                 muted: inv.notes == null || inv.notes!.isEmpty,
                 onTap: () async {
-                  final v = await promptText(context, 'وصف الفاتورة', initial: inv.notes, multiline: true);
+                  final v = await promptText(context, tr('وصف الفاتورة'), initial: inv.notes, multiline: true);
                   if (v != null) await save({'notes': v});
                 },
               ),
             ]),
             if (inv.returned > 0) ...[
               const SizedBox(height: 10),
-              Text('الصافي بعد المرتجع: ${money(inv.net)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              Text(tr('الصافي بعد المرتجع: {0}', [money(inv.net)]), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
             ],
             const SizedBox(height: 16),
             Row(
               children: [
-                const Expanded(
-                  child: Text('المرتجعات', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                Expanded(
+                  child: Text(tr('المرتجعات'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 ),
                 if (!inv.isVoid && inv.net > 0)
                   TextButton.icon(
                     onPressed: () async {
-                      final amount = await promptNumber(context, 'مرتجع جزئي على ${inv.number}',
-                          label: 'المبلغ (الصافي الحالي ${moneyShort(inv.net)})');
+                      final amount = await promptNumber(context, tr('مرتجع جزئي على {0}', [inv.number]),
+                          label: tr('المبلغ (الصافي الحالي {0})', [moneyShort(inv.net)]));
                       if (amount == null || amount <= 0 || !context.mounted) return;
                       if (amount > inv.net) {
-                        showSnack(context, 'المرتجع أكبر من صافي الفاتورة. للمرتجع الكامل استخدم «إلغاء الفاتورة»');
+                        showSnack(context, tr('المرتجع أكبر من صافي الفاتورة. للمرتجع الكامل استخدم «إلغاء الفاتورة»'));
                         return;
                       }
-                      final reason = await promptText(context, 'سبب المرتجع (اختياري)', confirmLabel: 'تسجيل');
+                      final reason = await promptText(context, tr('سبب المرتجع (اختياري)'), confirmLabel: tr('تسجيل'));
                       if (!context.mounted) return;
-                      if (await runAction(context, () => repo.addReturn(inv.id, amount, reason), success: 'سُجّل المرتجع')) {
+                      if (await runAction(context, () => repo.addReturn(inv.id, amount, reason), success: tr('سُجّل المرتجع'))) {
                         refreshSections(ref);
                       }
                     },
                     icon: const Icon(Icons.undo, size: 18),
-                    label: const Text('مرتجع'),
+                    label: Text(tr('مرتجع')),
                   ),
               ],
             ),
             if (inv.returns.isEmpty)
-              const Text('لا توجد مرتجعات', style: TextStyle(color: AppColors.muted, fontSize: 13))
+              Text(tr('لا توجد مرتجعات'), style: TextStyle(color: AppColors.muted, fontSize: 13))
             else
               CardBox(
                 radius: 14,
@@ -582,7 +583,7 @@ class InvoiceSheet extends ConsumerWidget {
                 child: Column(
                   children: [
                     for (var i = 0; i < inv.returns.length; i++) ...[
-                      if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                      if (i > 0) Divider(height: 1, color: AppColors.divider),
                       Row(
                         children: [
                           Expanded(
@@ -594,22 +595,22 @@ class InvoiceSheet extends ConsumerWidget {
                                   Text('${money(inv.returns[i].amount)} · ${formatShortDate(inv.returns[i].date)}',
                                       style: const TextStyle(fontSize: 14)),
                                   if (inv.returns[i].reason != null)
-                                    Text(inv.returns[i].reason!, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                                    Text(inv.returns[i].reason!, style: TextStyle(fontSize: 12, color: AppColors.muted)),
                                 ],
                               ),
                             ),
                           ),
                           IconButton(
-                            tooltip: 'حذف المرتجع',
-                            icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.urgent),
+                            tooltip: tr('حذف المرتجع'),
+                            icon: Icon(Icons.delete_outline, size: 20, color: AppColors.urgent),
                             onPressed: () async {
                               final ok = await confirmAction(context,
-                                  title: 'حذف المرتجع؟',
-                                  message: 'مرتجع ${money(inv.returns[i].amount)} سيُحذف ويعود صافي الفاتورة.',
-                                  confirmLabel: 'حذف',
+                                  title: tr('حذف المرتجع؟'),
+                                  message: tr('مرتجع {0} سيُحذف ويعود صافي الفاتورة.', [money(inv.returns[i].amount)]),
+                                  confirmLabel: tr('حذف'),
                                   destructive: true);
                               if (!ok || !context.mounted) return;
-                              if (await runAction(context, () => repo.deleteReturn(inv.returns[i].id), success: 'حُذف المرتجع')) {
+                              if (await runAction(context, () => repo.deleteReturn(inv.returns[i].id), success: tr('حُذف المرتجع'))) {
                                 refreshSections(ref);
                               }
                             },
@@ -623,19 +624,19 @@ class InvoiceSheet extends ConsumerWidget {
             const SizedBox(height: 16),
             Row(
               children: [
-                const Expanded(
-                  child: Text('الدفعات', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                Expanded(
+                  child: Text(tr('الدفعات'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 ),
                 if (!inv.isVoid && inv.remaining > 0)
                   TextButton.icon(
                     onPressed: () => _recordPayment(context, ref, const [], invoice: inv),
                     icon: const Icon(Icons.add, size: 18),
-                    label: const Text('دفعة'),
+                    label: Text(tr('دفعة')),
                   ),
               ],
             ),
             if (inv.payments.isEmpty)
-              const Text('لا توجد دفعات مسجلة', style: TextStyle(color: AppColors.muted, fontSize: 13))
+              Text(tr('لا توجد دفعات مسجلة'), style: TextStyle(color: AppColors.muted, fontSize: 13))
             else
               CardBox(
                 radius: 14,
@@ -643,7 +644,7 @@ class InvoiceSheet extends ConsumerWidget {
                 child: Column(
                   children: [
                     for (var i = 0; i < inv.payments.length; i++) ...[
-                      if (i > 0) const Divider(height: 1, color: AppColors.divider),
+                      if (i > 0) Divider(height: 1, color: AppColors.divider),
                       Row(
                         children: [
                           Expanded(
@@ -654,16 +655,16 @@ class InvoiceSheet extends ConsumerWidget {
                             ),
                           ),
                           IconButton(
-                            tooltip: 'حذف الدفعة',
-                            icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.urgent),
+                            tooltip: tr('حذف الدفعة'),
+                            icon: Icon(Icons.delete_outline, size: 20, color: AppColors.urgent),
                             onPressed: () async {
                               final ok = await confirmAction(context,
-                                  title: 'حذف الدفعة؟',
-                                  message: 'دفعة ${money(inv.payments[i].amount)} ستُحذف وتُعاد حالة الفاتورة تلقائيًا.',
-                                  confirmLabel: 'حذف',
+                                  title: tr('حذف الدفعة؟'),
+                                  message: tr('دفعة {0} ستُحذف وتُعاد حالة الفاتورة تلقائيًا.', [money(inv.payments[i].amount)]),
+                                  confirmLabel: tr('حذف'),
                                   destructive: true);
                               if (!ok || !context.mounted) return;
-                              if (await runAction(context, () => repo.deletePayment(inv.payments[i].id), success: 'حُذفت الدفعة')) {
+                              if (await runAction(context, () => repo.deletePayment(inv.payments[i].id), success: tr('حُذفت الدفعة'))) {
                                 refreshSections(ref);
                               }
                             },
@@ -679,33 +680,33 @@ class InvoiceSheet extends ConsumerWidget {
               onPressed: () async {
                 final ok = await confirmAction(
                   context,
-                  title: inv.isVoid ? 'استعادة الفاتورة؟' : 'إلغاء الفاتورة؟',
+                  title: inv.isVoid ? tr('استعادة الفاتورة؟') : tr('إلغاء الفاتورة؟'),
                   message: inv.isVoid
-                      ? 'تعود الفاتورة للحساب في المستحق، وتُحسب حالتها من دفعاتها.'
-                      : 'تبقى الفاتورة ظاهرة بحالة «ملغاة» ولا تُحسب في المستحق. يمكن استعادتها لاحقًا.',
-                  confirmLabel: inv.isVoid ? 'استعادة' : 'إلغاء الفاتورة',
+                      ? tr('تعود الفاتورة للحساب في المستحق، وتُحسب حالتها من دفعاتها.')
+                      : tr('تبقى الفاتورة ظاهرة بحالة «ملغاة» ولا تُحسب في المستحق. يمكن استعادتها لاحقًا.'),
+                  confirmLabel: inv.isVoid ? tr('استعادة') : tr('إلغاء الفاتورة'),
                 );
-                if (ok) await save({'status': inv.isVoid ? 'issued' : 'void'}, success: inv.isVoid ? 'استُعيدت الفاتورة' : 'أُلغيت الفاتورة');
+                if (ok) await save({'status': inv.isVoid ? 'issued' : 'void'}, success: inv.isVoid ? tr('استُعيدت الفاتورة') : tr('أُلغيت الفاتورة'));
               },
-              child: Text(inv.isVoid ? 'استعادة الفاتورة' : 'إلغاء الفاتورة (مرتجع كامل)'),
+              child: Text(inv.isVoid ? tr('استعادة الفاتورة') : tr('إلغاء الفاتورة (مرتجع كامل)')),
             ),
             if (canDelete) ...[
               const SizedBox(height: 8),
               TextButton.icon(
                 onPressed: () async {
                   final ok = await confirmAction(context,
-                      title: 'حذف الفاتورة ${inv.number}؟',
-                      message: 'تنتقل إلى سلة المحذوفات ويمكن استرجاعها خلال ٣٠ يومًا.',
-                      confirmLabel: 'حذف',
+                      title: tr('حذف الفاتورة {0}؟', [inv.number]),
+                      message: tr('تنتقل إلى سلة المحذوفات ويمكن استرجاعها خلال ٣٠ يومًا.'),
+                      confirmLabel: tr('حذف'),
                       destructive: true);
                   if (!ok || !context.mounted) return;
-                  if (await runAction(context, () => repo.softDelete('invoices', [inv.id]), success: 'نُقلت إلى السلة')) {
+                  if (await runAction(context, () => repo.softDelete('invoices', [inv.id]), success: tr('نُقلت إلى السلة'))) {
                     refreshSections(ref);
                     if (context.mounted) Navigator.pop(context);
                   }
                 },
-                icon: const Icon(Icons.delete_outline, color: AppColors.urgent),
-                label: const Text('حذف الفاتورة', style: TextStyle(color: AppColors.urgent)),
+                icon: Icon(Icons.delete_outline, color: AppColors.urgent),
+                label: Text(tr('حذف الفاتورة'), style: TextStyle(color: AppColors.urgent)),
               ),
             ],
           ],
@@ -728,7 +729,7 @@ class QuoteSheet extends ConsumerWidget {
     final repo = ref.read(sectionRepoProvider);
 
     Future<void> save(Map<String, dynamic> changes, {String? success}) async {
-      if (await runAction(context, () => repo.updateQuote(q.id, changes), success: success ?? 'حُفظ التعديل')) {
+      if (await runAction(context, () => repo.updateQuote(q.id, changes), success: success ?? tr('حُفظ التعديل'))) {
         refreshSections(ref);
       }
     }
@@ -742,14 +743,14 @@ class QuoteSheet extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Expanded(child: Text('عرض سعر ${q.number}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700))),
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
+                Expanded(child: Text(tr('عرض سعر {0}', [q.number]), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700))),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('إغلاق'))),
               ],
             ),
             const SizedBox(height: 12),
             FormCard(children: [
               FormDropdown<String>(
-                label: 'العميل',
+                label: tr('العميل'),
                 value: q.clientId,
                 allowEmpty: false,
                 items: {for (final c in clients) c.id: c.name},
@@ -758,21 +759,21 @@ class QuoteSheet extends ConsumerWidget {
                 },
               ),
               FormRow(
-                label: 'المبلغ قبل الضريبة',
+                label: tr('المبلغ قبل الضريبة'),
                 value: money(q.amount),
                 onTap: () async {
-                  final v = await promptNumber(context, 'المبلغ قبل الضريبة', initial: q.amount);
+                  final v = await promptNumber(context, tr('المبلغ قبل الضريبة'), initial: q.amount);
                   if (v != null && v >= 0) await save({'amount': v, 'vat_amount': q.vat > 0 ? v * 0.15 : 0});
                 },
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text('ضريبة ١٥٪ (${money(q.vat)})', style: const TextStyle(fontSize: 14)),
+                title: Text(tr('ضريبة ١٥٪ ({0})', [money(q.vat)]), style: const TextStyle(fontSize: 14)),
                 value: q.vat > 0,
                 onChanged: (v) => save({'vat_amount': v ? q.amount * 0.15 : 0}),
               ),
               FormDropdown<QuoteStatus>(
-                label: 'الحالة',
+                label: tr('الحالة'),
                 value: q.status,
                 allowEmpty: false,
                 items: {for (final s in QuoteStatus.values) s: s.label},
@@ -781,17 +782,17 @@ class QuoteSheet extends ConsumerWidget {
                 },
               ),
               FormRow(
-                label: 'الوصف',
-                value: (q.notes == null || q.notes!.isEmpty) ? 'أضف وصفًا' : q.notes!,
+                label: tr('الوصف'),
+                value: (q.notes == null || q.notes!.isEmpty) ? tr('أضف وصفًا') : q.notes!,
                 muted: q.notes == null || q.notes!.isEmpty,
                 onTap: () async {
-                  final v = await promptText(context, 'وصف عرض السعر', initial: q.notes, multiline: true);
+                  final v = await promptText(context, tr('وصف عرض السعر'), initial: q.notes, multiline: true);
                   if (v != null) await save({'notes': v});
                 },
               ),
             ]),
             const SizedBox(height: 10),
-            Text('الإجمالي شامل الضريبة: ${money(q.total)}',
+            Text(tr('الإجمالي شامل الضريبة: {0}', [money(q.total)]),
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
             const SizedBox(height: 16),
             FilledButton(
@@ -800,30 +801,30 @@ class QuoteSheet extends ConsumerWidget {
                   : () async {
                       final due = await pickDate(context, initial: DateTime.now().add(const Duration(days: 30)));
                       if (due == null || !context.mounted) return;
-                      if (await runAction(context, () => repo.quoteToInvoice(q, due), success: 'أُنشئت فاتورة من عرض السعر')) {
+                      if (await runAction(context, () => repo.quoteToInvoice(q, due), success: tr('أُنشئت فاتورة من عرض السعر'))) {
                         refreshSections(ref);
                         if (context.mounted) Navigator.pop(context);
                       }
                     },
-              child: const Text('تحويل إلى فاتورة'),
+              child: Text(tr('تحويل إلى فاتورة')),
             ),
             if (canDelete) ...[
               const SizedBox(height: 8),
               TextButton.icon(
                 onPressed: () async {
                   final ok = await confirmAction(context,
-                      title: 'حذف عرض السعر ${q.number}؟',
-                      message: 'ينتقل إلى سلة المحذوفات ويمكن استرجاعه خلال ٣٠ يومًا.',
-                      confirmLabel: 'حذف',
+                      title: tr('حذف عرض السعر {0}؟', [q.number]),
+                      message: tr('ينتقل إلى سلة المحذوفات ويمكن استرجاعه خلال ٣٠ يومًا.'),
+                      confirmLabel: tr('حذف'),
                       destructive: true);
                   if (!ok || !context.mounted) return;
-                  if (await runAction(context, () => repo.softDelete('quotes', [q.id]), success: 'نُقل إلى السلة')) {
+                  if (await runAction(context, () => repo.softDelete('quotes', [q.id]), success: tr('نُقل إلى السلة'))) {
                     refreshSections(ref);
                     if (context.mounted) Navigator.pop(context);
                   }
                 },
-                icon: const Icon(Icons.delete_outline, color: AppColors.urgent),
-                label: const Text('حذف عرض السعر', style: TextStyle(color: AppColors.urgent)),
+                icon: Icon(Icons.delete_outline, color: AppColors.urgent),
+                label: Text(tr('حذف عرض السعر'), style: TextStyle(color: AppColors.urgent)),
               ),
             ],
           ],

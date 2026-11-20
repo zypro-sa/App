@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme.dart';
 import '../data/models.dart';
+import '../core/i18n.dart';
 
 /// بطاقة بيضاء بحدود خفيفة — الوحدة الأساسية في التصميم.
 class CardBox extends StatelessWidget {
@@ -10,16 +11,19 @@ class CardBox extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(14),
-    this.borderColor = AppColors.line,
-    this.color = AppColors.surface,
+    Color? borderColor,
+    Color? color,
     this.radius = 18,
     this.onTap,
-  });
+  })  : _borderColor = borderColor,
+        _color = color;
 
   final Widget child;
   final EdgeInsetsGeometry padding;
-  final Color borderColor;
-  final Color color;
+  final Color? _borderColor;
+  final Color? _color;
+  Color get borderColor => _borderColor ?? AppColors.line;
+  Color get color => _color ?? AppColors.surface;
   final double radius;
   final VoidCallback? onTap;
 
@@ -63,7 +67,7 @@ class Pill extends StatelessWidget {
   factory Pill.forRequest(RequestItem r) {
     if (r.isOverdue) {
       final d = r.overdueDays;
-      return Pill.urgent(d <= 1 ? 'متأخر' : 'متأخر $d أيام');
+      return Pill.urgent(d <= 1 ? tr('متأخر') : tr('متأخر {0} أيام', [d]));
     }
     switch (r.status) {
       case RequestStatus.newRequest:
@@ -115,7 +119,7 @@ class SectionHeader extends StatelessWidget {
             ),
           ),
           if (onSeeAll != null)
-            TextButton(onPressed: onSeeAll, child: const Text('عرض الكل')),
+            TextButton(onPressed: onSeeAll, child: Text(tr('عرض الكل'))),
         ],
       ),
     );
@@ -124,12 +128,14 @@ class SectionHeader extends StatelessWidget {
 
 /// حرف أول داخل دائرة.
 class Avatar extends StatelessWidget {
-  const Avatar(this.letter, {super.key, this.size = 26, this.fg = AppColors.primary, this.bg = AppColors.primarySoft, this.radius});
+  const Avatar(this.letter, {super.key, this.size = 26, Color? fg, Color? bg, this.radius}) : _fg = fg, _bg = bg;
 
   final String letter;
   final double size;
-  final Color fg;
-  final Color bg;
+  final Color? _fg;
+  final Color? _bg;
+  Color get fg => _fg ?? AppColors.primary;
+  Color get bg => _bg ?? AppColors.primarySoft;
   final double? radius;
 
   @override
@@ -163,12 +169,12 @@ class TaskCheck extends StatelessWidget {
     final border = done
         ? AppColors.accent
         : overdue
-            ? const Color(0xFFC2410C)
-            : const Color(0xFF9AA2AE);
+            ? AppColors.danger
+            : AppColors.faint;
     return Semantics(
       checked: done,
       button: true,
-      label: done ? 'المهمة منجزة' : 'إنجاز المهمة',
+      label: done ? tr('المهمة منجزة') : tr('إنجاز المهمة'),
       child: InkResponse(
         onTap: () => onChanged(!done),
         radius: 22,
@@ -181,11 +187,11 @@ class TaskCheck extends StatelessWidget {
               width: 24,
               height: 24,
               decoration: BoxDecoration(
-                color: done ? AppColors.accent : Colors.white,
+                color: done ? AppColors.accent : AppColors.surface,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: border, width: 2),
               ),
-              child: done ? const Icon(Icons.check, size: 16, color: AppColors.ink) : null,
+              child: done ? Icon(Icons.check, size: 16, color: AppColors.onAccent) : null,
             ),
           ),
         ),
@@ -231,7 +237,7 @@ class EmptyState extends StatelessWidget {
         children: [
           Icon(icon, size: 36, color: AppColors.muted),
           const SizedBox(height: 8),
-          Text(message, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted)),
+          Text(message, textAlign: TextAlign.center, style: TextStyle(color: AppColors.muted)),
         ],
       ),
     );
@@ -253,15 +259,15 @@ class AsyncBody<T> extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const Icon(Icons.wifi_off, color: AppColors.muted, size: 36),
+            Icon(Icons.wifi_off, color: AppColors.muted, size: 36),
             const SizedBox(height: 8),
-            const Text('تعذّر تحميل البيانات', style: TextStyle(fontWeight: FontWeight.w600)),
+            Text(tr('تعذّر تحميل البيانات'), style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
             Text('${value.error}', textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                style: TextStyle(color: AppColors.muted, fontSize: 12)),
             if (onRetry != null) ...[
               const SizedBox(height: 12),
-              OutlinedButton(onPressed: onRetry, child: const Text('إعادة المحاولة')),
+              OutlinedButton(onPressed: onRetry, child: Text(tr('إعادة المحاولة'))),
             ],
           ],
         ),

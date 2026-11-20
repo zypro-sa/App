@@ -29,6 +29,7 @@ import '../features/quick_add/quick_add_sheet.dart';
 import '../features/requests/request_detail_screen.dart';
 import '../features/requests/requests_screen.dart';
 import '../features/tasks/tasks_screen.dart';
+import 'i18n.dart';
 
 /// يصبح true عند فتح رابط استعادة كلمة المرور.
 final passwordRecovery = ValueNotifier<bool>(false);
@@ -184,19 +185,19 @@ class AppShell extends StatelessWidget {
       body: shell,
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: FloatingActionButton(
-        tooltip: 'إضافة سريعة',
+        tooltip: tr('إضافة سريعة'),
         onPressed: () => showQuickAdd(context, initial: _quickAddDefaults[shell.currentIndex]),
         child: const Icon(Icons.add, size: 28),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: shell.currentIndex,
         onDestinationSelected: (i) => shell.goBranch(i, initialLocation: i == shell.currentIndex),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'اليوم'),
-          NavigationDestination(icon: Icon(Icons.inbox_outlined), selectedIcon: Icon(Icons.inbox), label: 'الطلبات'),
-          NavigationDestination(icon: Icon(Icons.check_box_outlined), selectedIcon: Icon(Icons.check_box), label: 'المهام'),
-          NavigationDestination(icon: Icon(Icons.calendar_today_outlined), selectedIcon: Icon(Icons.calendar_today), label: 'الاجتماعات'),
-          NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view), label: 'المزيد'),
+        destinations: [
+          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: tr('اليوم')),
+          NavigationDestination(icon: Icon(Icons.inbox_outlined), selectedIcon: Icon(Icons.inbox), label: tr('الطلبات')),
+          NavigationDestination(icon: Icon(Icons.check_box_outlined), selectedIcon: Icon(Icons.check_box), label: tr('المهام')),
+          NavigationDestination(icon: Icon(Icons.calendar_today_outlined), selectedIcon: Icon(Icons.calendar_today), label: tr('الاجتماعات')),
+          NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view), label: tr('المزيد')),
         ],
       ),
     );
