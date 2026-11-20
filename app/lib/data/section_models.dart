@@ -139,9 +139,13 @@ class Invoice {
     this.payments = const [],
     this.returns = const [],
     this.requestId,
+    this.daftraId,
   });
 
   final String? requestId;
+  /// رقمها في دفترة: الفواتير المزامنة تُعدّل في دفترة فقط
+  final int? daftraId;
+  bool get fromDaftra => daftraId != null;
   final String? clientId;
   final String? notes;
   final List<PaymentEntry> payments;
@@ -167,7 +171,7 @@ class Invoice {
   }
 
   static const select =
-      'id, number, total, issue_date, due_date, status, notes, client_id, request_id, client:clients(name), '
+      'id, number, total, issue_date, due_date, status, notes, client_id, request_id, daftra_id, client:clients(name), '
       'payments(id, amount, paid_at, deleted_at), invoice_returns(id, amount, returned_at, reason, deleted_at)';
 
   factory Invoice.fromMap(Map<String, dynamic> m) {
@@ -194,6 +198,7 @@ class Invoice {
       payments: entries,
       returns: rets,
       requestId: m['request_id'] as String?,
+      daftraId: (m['daftra_id'] as num?)?.toInt(),
     );
   }
 }
@@ -247,10 +252,13 @@ class Quote {
     this.sentAt,
     this.clientId,
     this.notes,
+    this.daftraId,
   });
 
   final String? clientId;
   final String? notes;
+  final int? daftraId;
+  bool get fromDaftra => daftraId != null;
 
   final String id;
   final String number;
@@ -262,7 +270,7 @@ class Quote {
 
   num get total => amount + vat;
 
-  static const select = 'id, number, amount, vat_amount, status, sent_at, notes, client_id, client:clients(name)';
+  static const select = 'id, number, amount, vat_amount, status, sent_at, notes, client_id, daftra_id, client:clients(name)';
 
   factory Quote.fromMap(Map<String, dynamic> m) => Quote(
         id: m['id'] as String,
@@ -274,6 +282,7 @@ class Quote {
         sentAt: _d(m['sent_at']),
         clientId: m['client_id'] as String?,
         notes: m['notes'] as String?,
+        daftraId: (m['daftra_id'] as num?)?.toInt(),
       );
 }
 
@@ -698,4 +707,23 @@ class NotificationKinds {
     ('assigned', tr('إسناد جديد'), tr('فور إسناد مهمة أو طلب إليك')),
     ('quote_no_reply', tr('عروض أسعار بلا رد'), tr('بعد ٣ أيام من الإرسال (لصلاحية المالية)')),
   ];
+}
+
+
+/// حالة المزامنة مع دفترة.
+class DaftraSyncState {
+  DaftraSyncState({required this.enabled, this.lastOkAt, this.lastRunAt, this.lastError, this.lastResult});
+  final bool enabled;
+  final DateTime? lastOkAt;
+  final DateTime? lastRunAt;
+  final String? lastError;
+  final Map<String, dynamic>? lastResult;
+
+  factory DaftraSyncState.fromMap(Map<String, dynamic>? m) => DaftraSyncState(
+        enabled: m?['enabled'] == true,
+        lastOkAt: m?['last_ok_at'] == null ? null : DateTime.parse(m!['last_ok_at'] as String).toLocal(),
+        lastRunAt: m?['last_run_at'] == null ? null : DateTime.parse(m!['last_run_at'] as String).toLocal(),
+        lastError: m?['last_error'] as String?,
+        lastResult: m?['last_result'] == null ? null : Map<String, dynamic>.from(m!['last_result'] as Map),
+      );
 }

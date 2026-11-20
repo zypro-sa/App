@@ -98,6 +98,16 @@ class MoreScreen extends ConsumerWidget {
                     onTap: () => _pickLanguage(context, ref),
                   ),
                   Divider(height: 1, color: AppColors.divider),
+                  if (can(Permissions.financeManage)) ...[
+                    ListTile(
+                      title: Text(tr('ربط دفترة')),
+                      leading: const Icon(Icons.sync_alt),
+                      subtitle: Text(tr('العملاء والفواتير والدفعات وعروض الأسعار'), style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                      trailing: Icon(AppIcons.forward),
+                      onTap: () => context.go('/more/daftra'),
+                    ),
+                    Divider(height: 1, color: AppColors.divider),
+                  ],
                   ListTile(title: Text(tr('ربط التقويم والبريد')), trailing: Icon(AppIcons.forward), onTap: soon),
                   Divider(height: 1, color: AppColors.divider),
                   ListTile(

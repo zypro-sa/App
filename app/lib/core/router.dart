@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/section_models.dart';
+import '../features/daftra/daftra_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/set_password_screen.dart';
 import '../features/finance/finance_screen.dart';
@@ -120,6 +121,7 @@ final appRouter = GoRouter(
                 ],
               ),
               GoRoute(path: 'finance', builder: (_, __) => const FinanceScreen()),
+              GoRoute(path: 'daftra', builder: (_, __) => const DaftraScreen()),
               GoRoute(path: 'notifications', builder: (_, __) => const NotificationSettingsScreen()),
               GoRoute(path: 'notes', builder: (_, __) => const NotesScreen()),
               GoRoute(path: 'reports', builder: (_, __) => const ReportsScreen()),
@@ -182,7 +184,7 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: shell,
+      body: DaftraAutoSync(child: shell),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: FloatingActionButton(
         tooltip: tr('إضافة سريعة'),
