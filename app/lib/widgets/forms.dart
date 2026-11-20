@@ -134,7 +134,7 @@ class SheetBody extends StatelessWidget {
     required this.onSubmit,
     String? submitLabel,
     this.busy = false,
-  });
+  }) : _submitLabel = submitLabel;
 
   final String title;
   final List<Widget> children;
@@ -216,7 +216,7 @@ class FormDropdown<T> extends StatelessWidget {
     required this.onChanged,
     this.allowEmpty = true,
     String? emptyLabel,
-  });
+  }) : _emptyLabel = emptyLabel;
 
   final String label;
   final T? value;

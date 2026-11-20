@@ -512,7 +512,7 @@ class _DropdownRow<T> extends StatelessWidget {
     required this.onChanged,
     this.allowEmpty = true,
     String? emptyLabel,
-  });
+  }) : _emptyLabel = emptyLabel;
 
   final String label;
   final T? value;
