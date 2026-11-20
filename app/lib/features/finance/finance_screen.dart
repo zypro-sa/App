@@ -10,6 +10,7 @@ import '../../data/repository.dart';
 import '../../data/section_models.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
+import '../daftra/daftra_screen.dart';
 import '../../widgets/forms.dart';
 import '../../core/i18n.dart';
 
@@ -36,6 +37,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final summary = ref.watch(financeSummaryProvider);
     final invoices = ref.watch(invoicesProvider);
     final quotes = ref.watch(quotesProvider);
+    final linked = ref.watch(daftraStateProvider).valueOrNull?.enabled ?? false;
     final now = DateTime.now();
 
     return Scaffold(
@@ -59,6 +61,10 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               onRetry: () => ref.invalidate(financeSummaryProvider),
               builder: (s) => _SummaryCard(s),
             ),
+            if (linked) ...[
+              const SizedBox(height: 10),
+              const DaftraSyncLine(),
+            ],
             const SizedBox(height: 14),
             SegmentedButton<bool>(
               showSelectedIcon: false,
@@ -87,6 +93,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                     : _QuoteList(list),
               ),
             const SizedBox(height: 14),
+            if (!linked)
             Row(
               children: [
                 if (!_quotes) ...[
@@ -108,7 +115,9 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              tr('الفوترة الرسمية تبقى في نظام المحاسبة · هنا للمتابعة فقط'),
+              linked
+                  ? tr('الفواتير والدفعات تُضاف وتُعدّل في دفترة، وتظهر هنا تلقائيًا')
+                  : tr('الفوترة الرسمية تبقى في نظام المحاسبة · هنا للمتابعة فقط'),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: AppColors.muted),
             ),
@@ -316,6 +325,12 @@ class _QuoteList extends ConsumerWidget {
                     ),
                   ),
                   Text(moneyShort(list[i].total), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  if (list[i].fromDaftra)
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(start: 8),
+                      child: _quotePill(list[i].status),
+                    )
+                  else
                   PopupMenuButton<QuoteStatus>(
                     tooltip: tr('تغيير الحالة'),
                     onSelected: (s) async {
@@ -451,6 +466,8 @@ class InvoiceSheet extends ConsumerWidget {
     if (inv == null) {
       return const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()));
     }
+    // فواتير دفترة: للعرض فقط، عدا ربطها بطلب ووصفها
+    final locked = inv.fromDaftra;
 
     Future<void> save(Map<String, dynamic> changes, {String? success}) async {
       if (await runAction(context, () => repo.updateInvoice(inv.id, changes), success: success ?? tr('حُفظ التعديل'))) {
@@ -478,25 +495,34 @@ class InvoiceSheet extends ConsumerWidget {
                   : tr('المدفوع {0} · المتبقي {1}', [money(inv.paid), money(inv.remaining)]),
               style: TextStyle(fontSize: 13, color: inv.isOverdue ? AppColors.urgent : AppColors.muted, fontWeight: FontWeight.w600),
             ),
+            if (locked) ...[
+              const SizedBox(height: 10),
+              _daftraNote(tr('من دفترة · المبالغ والدفعات تُعدّل في دفترة')),
+            ],
             const SizedBox(height: 14),
             FormCard(children: [
               FormRow(
                 label: tr('رقم الفاتورة'),
                 value: inv.number,
-                onTap: () async {
-                  final v = await promptText(context, tr('رقم الفاتورة'), initial: inv.number);
-                  if (v != null) await save({'number': v});
-                },
+                onTap: locked
+                    ? null
+                    : () async {
+                        final v = await promptText(context, tr('رقم الفاتورة'), initial: inv.number);
+                        if (v != null) await save({'number': v});
+                      },
               ),
-              FormDropdown<String>(
-                label: tr('العميل'),
-                value: inv.clientId,
-                allowEmpty: false,
-                items: {for (final c in clients) c.id: c.name},
-                onChanged: (v) {
-                  if (v != null) save({'client_id': v});
-                },
-              ),
+              if (locked)
+                FormRow(label: tr('العميل'), value: inv.clientName ?? '—')
+              else
+                FormDropdown<String>(
+                  label: tr('العميل'),
+                  value: inv.clientId,
+                  allowEmpty: false,
+                  items: {for (final c in clients) c.id: c.name},
+                  onChanged: (v) {
+                    if (v != null) save({'client_id': v});
+                  },
+                ),
               FormDropdown<String>(
                 label: tr('الطلب المرتبط'),
                 value: inv.requestId,
@@ -512,7 +538,7 @@ class InvoiceSheet extends ConsumerWidget {
               FormRow(
                 label: inv.returned > 0 ? tr('الإجمالي قبل المرتجع') : tr('الإجمالي شامل الضريبة'),
                 value: money(inv.total),
-                onTap: () async {
+                onTap: locked ? null : () async {
                   final v = await promptNumber(context, tr('الإجمالي'), label: tr('بالريال'), initial: inv.total);
                   if (v != null && v >= 0) await save({'total': v});
                 },
@@ -520,7 +546,7 @@ class InvoiceSheet extends ConsumerWidget {
               FormRow(
                 label: tr('تاريخ الإصدار'),
                 value: formatShortDate(inv.issueDate),
-                onTap: () async {
+                onTap: locked ? null : () async {
                   final d = await pickDate(context, initial: inv.issueDate);
                   if (d != null) await save({'issue_date': d.toIso8601String().substring(0, 10)});
                 },
@@ -528,7 +554,7 @@ class InvoiceSheet extends ConsumerWidget {
               FormRow(
                 label: tr('تاريخ الاستحقاق'),
                 value: formatShortDate(inv.dueDate),
-                onTap: () async {
+                onTap: locked ? null : () async {
                   final d = await pickDate(context, initial: inv.dueDate);
                   if (d != null) await save({'due_date': d.toIso8601String().substring(0, 10)});
                 },
@@ -553,7 +579,7 @@ class InvoiceSheet extends ConsumerWidget {
                 Expanded(
                   child: Text(tr('المرتجعات'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 ),
-                if (!inv.isVoid && inv.net > 0)
+                if (!locked && !inv.isVoid && inv.net > 0)
                   TextButton.icon(
                     onPressed: () async {
                       final amount = await promptNumber(context, tr('مرتجع جزئي على {0}', [inv.number]),
@@ -600,6 +626,7 @@ class InvoiceSheet extends ConsumerWidget {
                               ),
                             ),
                           ),
+                          if (!locked)
                           IconButton(
                             tooltip: tr('حذف المرتجع'),
                             icon: Icon(Icons.delete_outline, size: 20, color: AppColors.urgent),
@@ -627,7 +654,7 @@ class InvoiceSheet extends ConsumerWidget {
                 Expanded(
                   child: Text(tr('الدفعات'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 ),
-                if (!inv.isVoid && inv.remaining > 0)
+                if (!locked && !inv.isVoid && inv.remaining > 0)
                   TextButton.icon(
                     onPressed: () => _recordPayment(context, ref, const [], invoice: inv),
                     icon: const Icon(Icons.add, size: 18),
@@ -654,6 +681,7 @@ class InvoiceSheet extends ConsumerWidget {
                                   style: const TextStyle(fontSize: 14)),
                             ),
                           ),
+                          if (!locked)
                           IconButton(
                             tooltip: tr('حذف الدفعة'),
                             icon: Icon(Icons.delete_outline, size: 20, color: AppColors.urgent),
@@ -675,6 +703,7 @@ class InvoiceSheet extends ConsumerWidget {
                   ],
                 ),
               ),
+            if (!locked) ...[
             const SizedBox(height: 18),
             OutlinedButton(
               onPressed: () async {
@@ -708,6 +737,7 @@ class InvoiceSheet extends ConsumerWidget {
                 icon: Icon(Icons.delete_outline, color: AppColors.urgent),
                 label: Text(tr('حذف الفاتورة'), style: TextStyle(color: AppColors.urgent)),
               ),
+            ],
             ],
           ],
         ),
@@ -748,6 +778,24 @@ class QuoteSheet extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 12),
+            if (q.fromDaftra) ...[
+              _daftraNote(tr('من دفترة · يُعدّل ويُحوّل لفاتورة في دفترة')),
+              const SizedBox(height: 12),
+              FormCard(children: [
+                FormRow(label: tr('العميل'), value: q.clientName ?? '—'),
+                FormRow(label: tr('الإجمالي شامل الضريبة'), value: money(q.total)),
+                FormRow(label: tr('الحالة'), value: q.status.label),
+                FormRow(
+                  label: tr('الوصف'),
+                  value: (q.notes == null || q.notes!.isEmpty) ? tr('أضف وصفًا') : q.notes!,
+                  muted: q.notes == null || q.notes!.isEmpty,
+                  onTap: () async {
+                    final v = await promptText(context, tr('وصف عرض السعر'), initial: q.notes, multiline: true);
+                    if (v != null) await save({'notes': v});
+                  },
+                ),
+              ]),
+            ] else ...[
             FormCard(children: [
               FormDropdown<String>(
                 label: tr('العميل'),
@@ -827,9 +875,23 @@ class QuoteSheet extends ConsumerWidget {
                 label: Text(tr('حذف عرض السعر'), style: TextStyle(color: AppColors.urgent)),
               ),
             ],
+            ],
           ],
         ),
       ),
     );
   }
 }
+
+
+Widget _daftraNote(String text) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: AppColors.primarySoft, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          Icon(Icons.sync, size: 16, color: AppColors.accentText),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: TextStyle(fontSize: 12, color: AppColors.accentText, fontWeight: FontWeight.w600))),
+        ],
+      ),
+    );

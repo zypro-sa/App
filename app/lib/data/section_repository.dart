@@ -260,6 +260,27 @@ class SectionRepository {
     if (locale != null && userId is String) await setMemberLocale(userId, locale);
   }
 
+  // ------------------------------------------------------------------
+  // دفترة
+  // ------------------------------------------------------------------
+  Future<DaftraSyncState> daftraState() async {
+    final m = await _db.from('daftra_sync').select().eq('id', 1).maybeSingle();
+    return DaftraSyncState.fromMap(m);
+  }
+
+  /// تشغيل المزامنة. dryRun: تجربة دون أي تعديل. auto: مزامنة صامتة عند فتح التطبيق.
+  Future<Map<String, dynamic>> daftraSync({bool dryRun = false, bool auto = false}) async {
+    try {
+      final res = await _db.functions.invoke('daftra-sync', body: {'dry_run': dryRun, 'auto': auto});
+      final data = res.data;
+      if (data is Map && data['error'] != null) throw Exception(data['error']);
+      return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+    } on FunctionException catch (e) {
+      final d = e.details;
+      throw Exception(d is Map && d['error'] != null ? d['error'] : (d ?? e.reasonPhrase ?? e.status));
+    }
+  }
+
   Future<void> setMemberLocale(String id, String locale) =>
       _db.from('profiles').update({'locale': locale}).eq('id', id);
 
@@ -539,6 +560,8 @@ final financeSummaryProvider =
     FutureProvider<FinanceSummary>((ref) => ref.watch(sectionRepoProvider).financeSummary());
 final quotesProvider = FutureProvider<List<Quote>>((ref) => ref.watch(sectionRepoProvider).quotes());
 
+final daftraStateProvider = FutureProvider<DaftraSyncState>((ref) => ref.watch(sectionRepoProvider).daftraState());
+
 final notesProvider = FutureProvider<List<NoteItem>>((ref) => ref.watch(sectionRepoProvider).notes());
 
 final teamMembersProvider = FutureProvider<List<TeamMember>>((ref) => ref.watch(sectionRepoProvider).team());
@@ -595,6 +618,7 @@ void refreshSections(WidgetRef ref) {
   ref.invalidate(invoicesProvider);
   ref.invalidate(financeSummaryProvider);
   ref.invalidate(quotesProvider);
+  ref.invalidate(daftraStateProvider);
   ref.invalidate(notesProvider);
   ref.invalidate(teamMembersProvider);
   ref.invalidate(fieldSettingsProvider);
