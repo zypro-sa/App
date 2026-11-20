@@ -695,4 +695,5 @@ const Map<String, String> enStrings = {
   'من دفترة · يُعدّل ويُحوّل لفاتورة في دفترة': 'From Daftra · edit and convert to invoice in Daftra',
   'العملاء والفواتير والدفعات وعروض الأسعار': 'Clients, invoices, payments and quotes',
   '{0} عميل · {1} فاتورة · {2} دفعة · {3} عرض · {4} مرتجع': '{0} clients · {1} invoices · {2} payments · {3} quotes · {4} returns',
+  'تفاصيل المرتجعات': 'Return details',
 };
