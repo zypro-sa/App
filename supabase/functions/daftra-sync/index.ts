@@ -113,6 +113,7 @@ async function sync(db: SupabaseClient, dry: boolean) {
     quotes: { created: 0, updated: 0, removed: 0 },
     fields: {} as Record<string, string[]>,
     warnings: [] as string[],
+    details: [] as string[],
   };
   let fake = 0;
   const newId = () => `dry-${++fake}`;
@@ -150,18 +151,26 @@ async function sync(db: SupabaseClient, dry: boolean) {
   // المرتجعات في دفترة مستندات مستقلة مرتبطة بالفاتورة الأصلية
   const invoiceIds = new Set(dInvoices.map((i) => String(i.id)));
   const invoiceIdByNo = new Map(dInvoices.map((i) => [String(i.no ?? ""), String(i.id)]));
+  const invoiceNoById = new Map(dInvoices.map((i) => [String(i.id), String(i.no ?? i.id)]));
   const refundByInvoice = new Map<string, number>();
   let unlinked = 0;
   for (const x of dRefunds) {
     const candidates = [x.subscription_id, x.source_id, x.invoice_id, x.parent_invoice_id, x.related_invoice_id]
       .map((v) => String(v ?? "")).filter((v) => v && v !== "0");
     let parent = candidates.find((v) => invoiceIds.has(v));
+    let via = parent ? Object.keys(x).find((k) => String(x[k]) === parent && /id/i.test(k)) ?? "id" : "";
     if (!parent) {
+      via = "text";
       // أحيانًا يُذكر رقم الفاتورة الأصلية في الملاحظات أو الحقول النصية
       const text = `${x.notes ?? ""} ${x.po_number ?? ""} ${x.name ?? ""}`;
       for (const [no, id] of invoiceIdByNo) if (no && text.includes(no)) { parent = id; break; }
     }
-    if (!parent) { unlinked++; continue; }
+    if (!parent) {
+      unlinked++;
+      r.details.push(`مرتجع ${x.no ?? x.id} (${num(x.summary_total)}): بلا فاتورة`);
+      continue;
+    }
+    r.details.push(`مرتجع ${x.no ?? x.id} (${num(x.summary_total)}) ← فاتورة ${invoiceNoById.get(parent)} [${via}]`);
     refundByInvoice.set(parent, num((refundByInvoice.get(parent) ?? 0) + num(x.summary_total)));
   }
   if (unlinked > 0) {
@@ -282,6 +291,7 @@ async function sync(db: SupabaseClient, dry: boolean) {
     // لا نحذف مرتجعًا موجودًا إلا إذا عرفنا كل مرتجعات دفترة بثقة
     const shouldSync = Math.abs(activeSum - refund) > 0.01 && !fullyReturned && (refundsOk || refund > activeSum);
     if (shouldSync) {
+      r.details.push(`فاتورة ${number}: المرتجع في التطبيق ${activeSum} ← في دفترة ${refund}`);
       for (const x of active) {
         r.returns.removed++;
         await write(db.from("invoice_returns").update({ deleted_at: new Date().toISOString() }).eq("id", x.id), "حذف مرتجع");

@@ -227,6 +227,7 @@ class _DaftraScreenState extends ConsumerState<DaftraScreen> {
     final quotes = g('quotes');
     final mismatched = (payments['mismatched'] as List?) ?? const [];
     final warnings = (r['warnings'] as List?) ?? const [];
+    final details = (r['details'] as List?) ?? const [];
     final dry = r['dry_run'] == true;
 
     Widget line(String label, String value) => Padding(
@@ -264,6 +265,12 @@ class _DaftraScreenState extends ConsumerState<DaftraScreen> {
           line(tr('عروض الأسعار'), tr('جديدة {0} · محدّثة {1} · محذوفة {2}', [
             quotes['created'] ?? 0, quotes['updated'] ?? 0, quotes['removed'] ?? 0,
           ])),
+          if (details.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(tr('تفاصيل المرتجعات'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            for (final d in details)
+              Text('• $d', textDirection: TextDirection.rtl, style: TextStyle(fontSize: 12, color: AppColors.muted)),
+          ],
           if (mismatched.isNotEmpty || warnings.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(tr('تنبيهات'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.waiting)),
