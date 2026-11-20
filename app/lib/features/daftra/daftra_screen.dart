@@ -246,8 +246,9 @@ class _DaftraScreenState extends ConsumerState<DaftraScreen> {
           Text(dry ? tr('نتيجة التجربة (لم يُعدَّل شيء)') : tr('نتيجة المزامنة'),
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          line(tr('قُرئ من دفترة'), tr('{0} عميل · {1} فاتورة · {2} دفعة · {3} عرض', [
+          line(tr('قُرئ من دفترة'), tr('{0} عميل · {1} فاتورة · {2} دفعة · {3} عرض · {4} مرتجع', [
             fetched['clients'] ?? 0, fetched['invoices'] ?? 0, fetched['payments'] ?? 0, fetched['estimates'] ?? 0,
+            fetched['refunds'] ?? 0,
           ])),
           line(tr('العملاء'), tr('جديد {0} · رُبط {1}', [clients['created'] ?? 0, clients['linked'] ?? 0])),
           line(tr('الفواتير'), tr('جديدة {0} · محدّثة {1} · محذوفة {2}', [
