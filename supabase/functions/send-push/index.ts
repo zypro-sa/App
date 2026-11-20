@@ -10,7 +10,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
-const APP_BASE = Deno.env.get("APP_BASE_URL") ?? "https://zypro-sa.github.io/App/";
+const APP_BASE = Deno.env.get("APP_BASE_URL") ?? "https://app.zypro.sa/";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
