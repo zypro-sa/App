@@ -105,7 +105,7 @@ async function all(db: SupabaseClient, table: string, cols: string) {
 async function sync(db: SupabaseClient, dry: boolean) {
   const r = {
     dry_run: dry,
-    fetched: { clients: 0, invoices: 0, payments: 0, estimates: 0 },
+    fetched: { clients: 0, invoices: 0, payments: 0, estimates: 0, refunds: 0 },
     clients: { created: 0, linked: 0 },
     invoices: { created: 0, updated: 0, removed: 0, skipped_drafts: 0, skipped_fully_returned: 0, skipped_no_client: 0 },
     payments: { added: 0, updated: 0, removed: 0, mismatched: [] as string[] },
@@ -123,7 +123,14 @@ async function sync(db: SupabaseClient, dry: boolean) {
   };
 
   // ١. القراءة من دفترة
-  const [dClients, dInvoices, dPayments, dEstimates] = await Promise.all([
+  let refundsOk = true;
+  const softFetch = (path: string, wrapper: string, label: string) =>
+    fetchAll(path, wrapper).catch((e) => {
+      refundsOk = false;
+      r.warnings.push(`${label}: ${e.message}`);
+      return [] as Row[];
+    });
+  const [dClients, dInvoices, dPayments, dEstimates, dRefundReceipts, dCreditNotes] = await Promise.all([
     fetchAll("clients", "Client"),
     fetchAll("invoices", "Invoice"),
     fetchAll("invoice_payments", "InvoicePayment"),
@@ -131,10 +138,42 @@ async function sync(db: SupabaseClient, dry: boolean) {
       r.warnings.push(`عروض الأسعار: ${e.message}`);
       return [] as Row[];
     }),
+    softFetch("refund_receipts", "RefundReceipt", "إشعارات المرتجع"),
+    softFetch("credit_notes", "CreditNote", "الإشعارات الدائنة"),
   ]);
-  r.fetched = { clients: dClients.length, invoices: dInvoices.length, payments: dPayments.length, estimates: dEstimates.length };
+  const dRefunds = [...dRefundReceipts, ...dCreditNotes].filter((x) => !isDraft(x));
+  r.fetched = {
+    clients: dClients.length, invoices: dInvoices.length, payments: dPayments.length,
+    estimates: dEstimates.length, refunds: dRefunds.length,
+  };
+
+  // المرتجعات في دفترة مستندات مستقلة مرتبطة بالفاتورة الأصلية
+  const invoiceIds = new Set(dInvoices.map((i) => String(i.id)));
+  const invoiceIdByNo = new Map(dInvoices.map((i) => [String(i.no ?? ""), String(i.id)]));
+  const refundByInvoice = new Map<string, number>();
+  let unlinked = 0;
+  for (const x of dRefunds) {
+    const candidates = [x.subscription_id, x.source_id, x.invoice_id, x.parent_invoice_id, x.related_invoice_id]
+      .map((v) => String(v ?? "")).filter((v) => v && v !== "0");
+    let parent = candidates.find((v) => invoiceIds.has(v));
+    if (!parent) {
+      // أحيانًا يُذكر رقم الفاتورة الأصلية في الملاحظات أو الحقول النصية
+      const text = `${x.notes ?? ""} ${x.po_number ?? ""} ${x.name ?? ""}`;
+      for (const [no, id] of invoiceIdByNo) if (no && text.includes(no)) { parent = id; break; }
+    }
+    if (!parent) { unlinked++; continue; }
+    refundByInvoice.set(parent, num((refundByInvoice.get(parent) ?? 0) + num(x.summary_total)));
+  }
+  if (unlinked > 0) {
+    refundsOk = false;
+    const k = Object.keys(dRefunds[0] ?? {}).filter((f) => /id|no|source|subscription|invoice/i.test(f)).join(", ");
+    r.warnings.push(`${unlinked} مرتجع لم يُعرف لأي فاتورة (الحقول: ${k}) — لن تُحذف المرتجعات الموجودة`);
+  }
   const keys = (rows: Row[]) => (rows[0] ? Object.keys(rows[0]).filter((k) => typeof rows[0][k] !== "object" || rows[0][k] === null) : []);
-  r.fields = { client: keys(dClients), invoice: keys(dInvoices), payment: keys(dPayments), estimate: keys(dEstimates) };
+  r.fields = {
+    client: keys(dClients), invoice: keys(dInvoices), payment: keys(dPayments),
+    estimate: keys(dEstimates), refund: keys(dRefunds),
+  };
 
   // ٢. العملاء
   const lClients = await all(db, "clients", "id, name, custom, daftra_id");
@@ -194,7 +233,7 @@ async function sync(db: SupabaseClient, dry: boolean) {
 
     const number = `DF-${String(di.no ?? did).trim()}`;
     const total = num(di.summary_total);
-    const refund = num(di.summary_refund);
+    const refund = Math.max(num(di.summary_refund), refundByInvoice.get(did) ?? 0);
     const paid = num(di.summary_paid);
     const fullyReturned = total > 0 && refund >= total - 0.01;
     const clientId = clientByDaftra.get(String(di.client_id ?? di.Client?.id ?? ""));
@@ -240,7 +279,9 @@ async function sync(db: SupabaseClient, dry: boolean) {
     // المرتجع: سجل واحد بإجمالي المرتجع في دفترة
     const active = lReturns.filter((x) => x.invoice_id === localId && !x.deleted_at);
     const activeSum = num(active.reduce((s, x) => s + num(x.amount), 0));
-    if (Math.abs(activeSum - refund) > 0.01 && !fullyReturned) {
+    // لا نحذف مرتجعًا موجودًا إلا إذا عرفنا كل مرتجعات دفترة بثقة
+    const shouldSync = Math.abs(activeSum - refund) > 0.01 && !fullyReturned && (refundsOk || refund > activeSum);
+    if (shouldSync) {
       for (const x of active) {
         r.returns.removed++;
         await write(db.from("invoice_returns").update({ deleted_at: new Date().toISOString() }).eq("id", x.id), "حذف مرتجع");
