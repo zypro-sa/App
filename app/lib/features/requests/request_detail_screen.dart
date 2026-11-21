@@ -28,7 +28,7 @@ class RequestDetailScreen extends ConsumerWidget {
     };
     final d = detail.valueOrNull;
     final canEdit = (me?.can(Permissions.requestsManage) ?? false) || (d != null && d.assigneeId == me?.id);
-    final canDelete = me?.can(Permissions.dataDelete) ?? false;
+    final canDelete = me?.can(Permissions.requestsDelete) ?? false;
     final repo = ref.read(sectionRepoProvider);
 
     Future<void> update(Map<String, dynamic> changes, {String? success}) async {

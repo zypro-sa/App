@@ -128,7 +128,9 @@ class SectionHeader extends StatelessWidget {
 
 /// حرف أول داخل دائرة.
 class Avatar extends StatelessWidget {
-  const Avatar(this.letter, {super.key, this.size = 26, Color? fg, Color? bg, this.radius}) : _fg = fg, _bg = bg;
+  const Avatar(this.letter, {super.key, this.size = 26, Color? fg, Color? bg, this.radius, this.imageUrl})
+      : _fg = fg,
+        _bg = bg;
 
   final String letter;
   final double size;
@@ -138,19 +140,33 @@ class Avatar extends StatelessWidget {
   Color get bg => _bg ?? AppColors.primarySoft;
   final double? radius;
 
+  /// الصورة الشخصية إن وُجدت؛ وإلا يظهر الحرف الأول
+  final String? imageUrl;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final r = BorderRadius.circular(radius ?? size / 2);
+    final fallback = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(radius ?? size / 2),
-      ),
+      decoration: BoxDecoration(color: bg, borderRadius: r),
       child: Text(
         letter,
         style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: size * 0.45),
+      ),
+    );
+    final url = imageUrl;
+    if (url == null || url.isEmpty) return fallback;
+    return ClipRRect(
+      borderRadius: r,
+      child: Image.network(
+        url,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback,
+        loadingBuilder: (_, child, progress) => progress == null ? child : fallback,
       ),
     );
   }

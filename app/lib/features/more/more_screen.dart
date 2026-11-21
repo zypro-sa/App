@@ -36,9 +36,12 @@ class MoreScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
           children: [
-            Row(
+            InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => context.go('/more/account'),
+              child: Row(
               children: [
-                Avatar(profile?.initial ?? tr('؟'), size: 52, fg: AppColors.accent, bg: AppColors.hero, radius: 16),
+                Avatar(profile?.initial ?? tr('؟'), size: 52, fg: AppColors.accent, bg: AppColors.hero, radius: 16, imageUrl: profile?.avatarUrl),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -52,7 +55,10 @@ class MoreScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
+                Text(tr('حسابي'), style: TextStyle(fontSize: 13, color: AppColors.accentText, fontWeight: FontWeight.w600)),
+                Icon(AppIcons.forward, color: AppColors.accentText),
               ],
+            ),
             ),
             const SizedBox(height: 16),
             GridView.count(
