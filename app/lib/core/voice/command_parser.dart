@@ -419,6 +419,24 @@ ParsedCommand parseCommand(
   );
 }
 
+final _postponeWords = RegExp(
+    r'(تاجيل|تاجل|يوجل|نوجل|موجل|اجلنا|اجلت|ترحيل الاجتماع|postpone|reschedul|اجل (ال)?(اجتماع|موعد|لقاء|زياره|ميتنج))',
+    caseSensitive: false);
+
+/// هل يتحدث السطر عن تأجيل الاجتماع نفسه؟ (مثل: «تم تأجيل الاجتماع إلى الغد»)
+bool isPostponeLine(String line) => _postponeWords.hasMatch(normalizeArabic(line));
+
+/// إن ذكر المحضر تأجيل الاجتماع مع موعد، نعيد الموعد الجديد.
+ParsedCommand? findPostponement(String minutes, {DateTime? now}) {
+  for (final line in minutes.split(RegExp(r'\r?\n'))) {
+    if (!isPostponeLine(line)) continue;
+    final p = parseCommand(line, now: now);
+    if (p.when != null) return p;
+    return ParsedCommand(title: line.trim());
+  }
+  return null;
+}
+
 /// استخراج المهام من نص المحضر: الأسطر النقطية أو المرقّمة أو التي تبدأ بـ «مهمة:».
 class MinuteTask {
   MinuteTask(this.parsed, {required this.selected});
@@ -442,6 +460,7 @@ List<MinuteTask> extractTasks(
     if (bullet.hasMatch(lines[i]) || marker.hasMatch(lines[i]) || verbs.hasMatch(lines[i])) strong.add(i);
   }
   for (var i = 0; i < lines.length; i++) {
+    if (isPostponeLine(lines[i])) continue; // التأجيل ليس مهمة
     var l = lines[i].replaceFirst(bullet, '');
     l = l.replaceFirst(marker, '');
     if (l.trim().length < 3) continue;

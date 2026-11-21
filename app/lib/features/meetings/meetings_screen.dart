@@ -7,6 +7,7 @@ import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../widgets/common.dart';
+import '../../widgets/forms.dart' show runAction;
 import '../../core/i18n.dart';
 import '../../core/voice/command_parser.dart';
 import '../../widgets/voice_input.dart';
@@ -90,7 +91,7 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
                   return EmptyState(tr('لا توجد اجتماعات في هذا اليوم'), icon: Icons.event_available_outlined);
                 }
                 final now = DateTime.now();
-                final nextIndex = list.indexWhere((m) => m.endAt.isAfter(now));
+                final nextIndex = list.indexWhere((m) => m.endAt.isAfter(now) && m.status == MeetingStatus.scheduled);
                 return Column(
                   children: [
                     for (var i = 0; i < list.length; i++) ...[
@@ -170,7 +171,12 @@ class _TimelineRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Expanded(child: highlighted ? _MeetingCardExpanded(meeting) : _MeetingCardCompact(meeting)),
+        Expanded(
+          child: Opacity(
+            opacity: meeting.status == MeetingStatus.cancelled ? 0.55 : 1,
+            child: highlighted ? _MeetingCardExpanded(meeting) : _MeetingCardCompact(meeting),
+          ),
+        ),
       ],
     );
   }
@@ -184,11 +190,17 @@ class _MeetingCardCompact extends StatelessWidget {
   Widget build(BuildContext context) {
     return CardBox(
       onTap: () => _openMinutes(context, m),
+      padding: const EdgeInsetsDirectional.fromSTEB(14, 6, 4, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(m.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 2),
+          Row(
+            children: [
+              Expanded(child: Text(m.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600))),
+              if (m.status != MeetingStatus.scheduled) _statusPill(m.status),
+              MeetingActions(meeting: m),
+            ],
+          ),
           Text(
             [
               tr('{0} دقيقة', [m.durationMinutes]),
@@ -227,6 +239,7 @@ class _MeetingCardExpanded extends StatelessWidget {
               const Spacer(),
               Text(tr('{0} دقيقة · {1}', [m.durationMinutes, m.type.label]),
                   style: TextStyle(fontSize: 12, color: AppColors.muted)),
+              MeetingActions(meeting: m),
             ],
           ),
           const SizedBox(height: 10),
@@ -333,6 +346,10 @@ class _MinutesSheetState extends ConsumerState<_MinutesSheet> {
       await ref.read(repositoryProvider).saveMinutes(widget.meeting.id, text);
       refreshAll(ref);
       if (mounted) {
+        // ذكر المحضر تأجيل الاجتماع؟ نسأل قبل إغلاق النافذة
+        final postpone = findPostponement(text);
+        if (postpone != null) await _offerPostpone(context, ref, widget.meeting, postpone);
+        if (!mounted) return;
         final messenger = ScaffoldMessenger.of(context);
         final nav = Navigator.of(context);
         final rootContext = nav.context;
@@ -594,4 +611,125 @@ class _TasksFromMinutesSheetState extends ConsumerState<_TasksFromMinutesSheet> 
       ),
     );
   }
+}
+
+
+Widget _statusPill(MeetingStatus s) => switch (s) {
+      MeetingStatus.done => Pill(s.label, fg: AppColors.done, bg: AppColors.doneSoft),
+      MeetingStatus.postponed => Pill(s.label, fg: AppColors.waiting, bg: AppColors.waitingSoft),
+      MeetingStatus.cancelled => Pill(s.label, fg: AppColors.urgent, bg: AppColors.urgentSoft),
+      MeetingStatus.scheduled => Pill.neutral(s.label),
+    };
+
+/// اختيار موعد جديد (التاريخ ثم الوقت)
+Future<DateTime?> _pickNewTime(BuildContext context, DateTime current, {DateTime? suggested}) async {
+  final now = DateTime.now();
+  final base = suggested ?? current;
+  final date = await showDatePicker(
+    context: context,
+    initialDate: base.isBefore(now) ? now : base,
+    firstDate: DateTime(now.year, now.month, now.day),
+    lastDate: now.add(const Duration(days: 365 * 2)),
+    helpText: tr('الموعد الجديد'),
+  );
+  if (date == null || !context.mounted) return null;
+  final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(base));
+  if (time == null) return null;
+  return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+}
+
+Future<void> _reschedule(BuildContext context, WidgetRef ref, Meeting m, DateTime to) async {
+  if (await runAction(
+    context,
+    () => ref.read(repositoryProvider).rescheduleMeeting(m.id, to, m.durationMinutes),
+    success: tr('أُجّل الاجتماع إلى {0} · {1}', [relativeDay(to), formatTime(to)]),
+  )) {
+    refreshAll(ref);
+  }
+}
+
+/// المحضر ذكر تأجيل الاجتماع: نعرض نقله للموعد المذكور
+Future<void> _offerPostpone(BuildContext context, WidgetRef ref, Meeting m, ParsedCommand p) async {
+  DateTime? to;
+  if (p.when != null) {
+    final w = p.when!;
+    to = p.hasTime ? w : DateTime(w.year, w.month, w.day, m.startAt.hour, m.startAt.minute);
+  }
+  final answer = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(tr('تأجيل الاجتماع؟')),
+      content: Text(to != null
+          ? tr('ذكر المحضر تأجيل الاجتماع. هل تريد نقله إلى {0} الساعة {1}؟', [relativeDay(to), formatTime(to)])
+          : tr('ذكر المحضر تأجيل الاجتماع دون موعد. هل تريد اختيار موعد جديد؟')),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('لا'))),
+        if (to != null) TextButton(onPressed: () => Navigator.pop(ctx, 'pick'), child: Text(tr('موعد آخر'))),
+        FilledButton(onPressed: () => Navigator.pop(ctx, to != null ? 'yes' : 'pick'), child: Text(to != null ? tr('نعم، أجّله') : tr('اختيار موعد'))),
+      ],
+    ),
+  );
+  if (answer == null || !context.mounted) return;
+  if (answer == 'pick') {
+    to = await _pickNewTime(context, m.startAt, suggested: to);
+    if (to == null || !context.mounted) return;
+  }
+  await _reschedule(context, ref, m, to!);
+}
+
+/// قائمة حالة الاجتماع: تم، تأجيل، لم يُعقد
+class MeetingActions extends ConsumerWidget {
+  const MeetingActions({super.key, required this.meeting});
+  final Meeting meeting;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final m = meeting;
+    final repo = ref.read(repositoryProvider);
+    Future<void> setStatus(MeetingStatus s, String done) async {
+      if (await runAction(context, () => repo.setMeetingStatus(m.id, s), success: done)) refreshAll(ref);
+    }
+
+    return PopupMenuButton<String>(
+      tooltip: tr('حالة الاجتماع'),
+      icon: Icon(Icons.more_vert, color: AppColors.muted),
+      onSelected: (v) async {
+        switch (v) {
+          case 'done':
+            await setStatus(MeetingStatus.done, tr('تم تسجيل انعقاد الاجتماع'));
+          case 'postpone':
+            final to = await _pickNewTime(context, m.startAt);
+            if (to != null && context.mounted) await _reschedule(context, ref, m, to);
+          case 'postponed':
+            await setStatus(MeetingStatus.postponed, tr('سُجّل الاجتماع مؤجلًا دون موعد'));
+          case 'cancelled':
+            await setStatus(MeetingStatus.cancelled, tr('سُجّل أن الاجتماع لم يُعقد'));
+          case 'scheduled':
+            await setStatus(MeetingStatus.scheduled, tr('أُعيد الاجتماع إلى مجدول'));
+          case 'minutes':
+            await _openMinutes(context, m);
+        }
+      },
+      itemBuilder: (_) => [
+        if (m.status != MeetingStatus.done)
+          PopupMenuItem(value: 'done', child: _item(Icons.check_circle_outline, tr('تم عقد الاجتماع'), AppColors.done)),
+        PopupMenuItem(value: 'postpone', child: _item(Icons.event_repeat, tr('تأجيل لموعد جديد'), AppColors.waiting)),
+        if (m.status != MeetingStatus.postponed)
+          PopupMenuItem(value: 'postponed', child: _item(Icons.schedule, tr('مؤجل دون موعد'), AppColors.waiting)),
+        if (m.status != MeetingStatus.cancelled)
+          PopupMenuItem(value: 'cancelled', child: _item(Icons.cancel_outlined, tr('لم يُعقد / أُلغي'), AppColors.urgent)),
+        if (m.status != MeetingStatus.scheduled)
+          PopupMenuItem(value: 'scheduled', child: _item(Icons.undo, tr('إعادة إلى مجدول'), AppColors.muted)),
+        PopupMenuItem(value: 'minutes', child: _item(Icons.edit_note, tr('المحضر'), AppColors.ink)),
+      ],
+    );
+  }
+
+  Widget _item(IconData icon, String label, Color color) => Row(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 10),
+          Text(label),
+        ],
+      );
 }

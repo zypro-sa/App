@@ -188,7 +188,6 @@ class Repository {
         .from('meetings')
         .select(Meeting.select)
         .isFilter('deleted_at', null)
-        .neq('status', 'cancelled')
         .gte('start_at', _iso(start))
         .lt('start_at', _iso(end))
         .order('start_at', ascending: true);
@@ -237,9 +236,21 @@ class Repository {
     }
   }
 
-  Future<void> saveMinutes(String meetingId, String minutes) => _db
-      .from('meetings')
-      .update({'minutes': minutes, 'status': 'done'}).eq('id', meetingId);
+  Future<void> setMeetingStatus(String id, MeetingStatus status) =>
+      _db.from('meetings').update({'status': status.db}).eq('id', id);
+
+  /// تأجيل لموعد جديد: يبقى «مجدولًا» حتى تصل تذكيراته في الموعد الجديد
+  Future<void> rescheduleMeeting(String id, DateTime start, int durationMinutes) => _db.from('meetings').update({
+        'start_at': _iso(start),
+        'end_at': _iso(start.add(Duration(minutes: durationMinutes))),
+        'status': 'scheduled',
+      }).eq('id', id);
+
+  /// حفظ المحضر؛ الاجتماع المجدول يصبح «منعقدًا»
+  Future<void> saveMinutes(String meetingId, String minutes) async {
+    await _db.from('meetings').update({'minutes': minutes}).eq('id', meetingId);
+    await _db.from('meetings').update({'status': 'done'}).eq('id', meetingId).eq('status', 'scheduled');
+  }
 
   Future<void> createMeeting({
     required String title,
