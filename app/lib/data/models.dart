@@ -66,6 +66,21 @@ enum MeetingType {
       values.firstWhere((e) => e.db == v, orElse: () => inPerson);
 }
 
+enum MeetingStatus {
+  scheduled('scheduled', 'مجدول'),
+  done('done', 'منعقد'),
+  postponed('postponed', 'مؤجل'),
+  cancelled('cancelled', 'ملغى');
+
+  const MeetingStatus(this.db, this.labelAr);
+  final String db;
+  final String labelAr;
+  String get label => tr(labelAr);
+
+  static MeetingStatus from(String? v) =>
+      values.firstWhere((e) => e.db == v, orElse: () => scheduled);
+}
+
 enum FollowupDirection {
   promised('promised', 'وعدتُ بها'),
   waiting('waiting', 'أنتظرها');
@@ -265,8 +280,10 @@ class Meeting {
     this.minutes,
     this.agenda = const [],
     this.attendeeCount = 0,
+    this.status = MeetingStatus.scheduled,
   });
 
+  final MeetingStatus status;
   final String id;
   final String title;
   final DateTime startAt;
@@ -282,7 +299,7 @@ class Meeting {
   int get durationMinutes => endAt.difference(startAt).inMinutes;
 
   static const select =
-      'id, title, start_at, end_at, type, location, minutes, client_id, '
+      'id, title, start_at, end_at, type, location, minutes, client_id, status, '
       'client:clients(name), agenda_items(order, title), meeting_attendees(count)';
 
   factory Meeting.fromMap(Map<String, dynamic> m) {
@@ -304,6 +321,7 @@ class Meeting {
       minutes: m['minutes'] as String?,
       agenda: agenda,
       attendeeCount: count,
+      status: MeetingStatus.from(m['status'] as String?),
     );
   }
 }

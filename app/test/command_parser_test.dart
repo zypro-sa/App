@@ -65,4 +65,15 @@ void main() {
     expect(tasks.length, 2);
     expect(tasks.any((t) => t.selected), false);
   });
+
+  test('التأجيل في المحضر: يُكتشف الموعد ولا يتحول لمهمة', () {
+    const minutes = 'تم تأجيل الاجتماع الى يوم غداً\n- أحمد يجهز العرض';
+    final p = findPostponement(minutes, now: now);
+    expect(p?.when, DateTime(2026, 11, 22));
+    final tasks = extractTasks(minutes, team: team, now: now);
+    expect(tasks.length, 1);
+    expect(tasks.first.parsed.title, 'يجهز العرض');
+    expect(isPostponeLine('أجل الاجتماع الى الأحد'), true);
+    expect(isPostponeLine('نرسل العرض من أجل العميل'), false);
+  });
 }
