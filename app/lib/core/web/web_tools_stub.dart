@@ -6,3 +6,5 @@ bool sessionFlag(bool set) => true;
 Future<bool> bioAvailable() async => false;
 Future<String> bioRegister(String userId, String name) async => 'error:unsupported';
 Future<String> bioVerify(String credentialId) async => 'error:unsupported';
+Future<String> bioSeal(String credentialId, String text) async => 'error:unsupported';
+Future<String> bioOpen(String credentialId, String sealed) async => 'error:unsupported';

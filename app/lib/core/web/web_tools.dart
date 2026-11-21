@@ -24,3 +24,9 @@ Future<String> bioRegister(String userId, String name) => impl.bioRegister(userI
 
 /// التحقق بالبصمة؛ يعيد ok أو error:...
 Future<String> bioVerify(String credentialId) => impl.bioVerify(credentialId);
+
+/// تشفير نص بمفتاح يُستخرج بعد Face ID؛ يعيد النص المشفّر أو error:...
+Future<String> bioSeal(String credentialId, String text) => impl.bioSeal(credentialId, text);
+
+/// فك التشفير بعد Face ID؛ يعيد ok:النص أو error:...
+Future<String> bioOpen(String credentialId, String sealed) => impl.bioOpen(credentialId, sealed);

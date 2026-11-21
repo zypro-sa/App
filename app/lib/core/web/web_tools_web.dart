@@ -81,3 +81,25 @@ Future<String> bioVerify(String credentialId) async {
     return 'error:unknown';
   }
 }
+
+@JS('zyproBioSeal')
+external JSPromise<JSString> _bioSeal(JSString id, JSString text);
+
+@JS('zyproBioOpen')
+external JSPromise<JSString> _bioOpen(JSString id, JSString sealed);
+
+Future<String> bioSeal(String credentialId, String text) async {
+  try {
+    return (await _bioSeal(credentialId.toJS, text.toJS).toDart).toDart;
+  } catch (_) {
+    return 'error:unknown';
+  }
+}
+
+Future<String> bioOpen(String credentialId, String sealed) async {
+  try {
+    return (await _bioOpen(credentialId.toJS, sealed.toJS).toDart).toDart;
+  } catch (_) {
+    return 'error:unknown';
+  }
+}

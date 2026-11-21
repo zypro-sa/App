@@ -39,7 +39,6 @@ class _LockScreenState extends State<LockScreen> {
   }
 
   Future<void> _usePassword() async {
-    await AuthPrefs.disableLock();
     try {
       await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
     } catch (_) {}
@@ -96,48 +95,101 @@ class _LockScreenState extends State<LockScreen> {
   }
 }
 
-/// تفعيل القفل بالبصمة لهذا الجهاز. يعيد true عند النجاح.
-Future<bool> enableBioLock(BuildContext context) async {
-  final user = Supabase.instance.client.auth.currentUser;
-  if (user == null) return false;
-  if (!await bioAvailable()) {
-    if (context.mounted) _snack(context, tr('هذا الجهاز أو المتصفح لا يدعم Face ID أو البصمة'));
-    return false;
-  }
-  final res = await bioRegister(user.id, user.email ?? 'Zypro');
-  if (!context.mounted) return false;
-  if (res.startsWith('error:')) {
-    _snack(context, res.contains('NotAllowed') ? tr('أُلغي التفعيل') : tr('تعذّر التفعيل: {0}', [res.substring(6)]));
-    return false;
-  }
-  await AuthPrefs.enableLock(user.id, res);
-  if (context.mounted) _snack(context, tr('تم التفعيل — سيُطلب Face ID أو البصمة عند فتح التطبيق'));
-  return true;
-}
+String _err(String res) => res.contains('NotAllowed') ? tr('أُلغي التحقق') : tr('تعذّر التفعيل: {0}', [res.replaceFirst('error:', '')]);
 
 void _snack(BuildContext context, String m) {
   final s = ScaffoldMessenger.maybeOf(context);
   s?.showSnackBar(SnackBar(content: Text(m)));
 }
 
-/// عرض تفعيل البصمة بعد أول تسجيل دخول (مرة واحدة)
+/// يضمن وجود بصمة مسجّلة لهذا المستخدم على الجهاز
+Future<String?> _ensureCredential(BuildContext context, {bool fresh = false}) async {
+  final user = Supabase.instance.client.auth.currentUser;
+  if (user == null) return null;
+  if (!await bioAvailable()) {
+    if (context.mounted) _snack(context, tr('هذا الجهاز أو المتصفح لا يدعم Face ID أو البصمة'));
+    return null;
+  }
+  final existing = AuthPrefs.credentialFor(user.id);
+  if (!fresh && existing != null) return existing;
+  final res = await bioRegister(user.id, user.email ?? 'Zypro');
+  if (!context.mounted) return null;
+  if (res.startsWith('error:')) {
+    _snack(context, _err(res));
+    return null;
+  }
+  await AuthPrefs.setCredential(user.id, res);
+  return res;
+}
+
+/// تفعيل القفل بالبصمة لهذا الجهاز. يعيد true عند النجاح.
+Future<bool> enableBioLock(BuildContext context, {bool quiet = false}) async {
+  final user = Supabase.instance.client.auth.currentUser;
+  final cred = await _ensureCredential(context);
+  if (cred == null || user == null) return false;
+  await AuthPrefs.enableLock(user.id, cred);
+  if (!quiet && context.mounted) _snack(context, tr('تم التفعيل — سيُطلب Face ID أو البصمة عند فتح التطبيق'));
+  return true;
+}
+
+/// حفظ كلمة المرور مشفّرة للدخول بـ Face ID
+Future<bool> enableBioLogin(BuildContext context, String password) async {
+  final user = Supabase.instance.client.auth.currentUser;
+  if (user?.email == null) return false;
+  var cred = await _ensureCredential(context);
+  if (cred == null || !context.mounted) return false;
+  var sealed = await bioSeal(cred, password);
+  if (sealed == 'error:NoPrf' && context.mounted) {
+    // بصمة قديمة بلا مفتاح تشفير → نسجّل واحدة جديدة
+    cred = await _ensureCredential(context, fresh: true);
+    if (cred == null || !context.mounted) return false;
+    sealed = await bioSeal(cred, password);
+  }
+  if (!context.mounted) return false;
+  if (sealed == 'error:NoPrf') {
+    _snack(context, tr('هذا الجهاز لا يدعم حفظ كلمة المرور بـ Face ID — حدّث نظام الآيفون إلى iOS 18 أو أحدث'));
+    return false;
+  }
+  if (sealed.startsWith('error:')) {
+    _snack(context, _err(sealed));
+    return false;
+  }
+  await AuthPrefs.saveBioLogin(user!.email!, sealed);
+  if (context.mounted) _snack(context, tr('تم — يمكنك الآن الدخول بـ Face ID دون كلمة المرور'));
+  return true;
+}
+
+/// عرض التفعيل بعد أول تسجيل دخول (مرة واحدة)
 Future<void> maybeOfferBio(BuildContext context) async {
   if (!pendingBioOffer) return;
   pendingBioOffer = false;
+  final password = lastLoginPassword;
+  lastLoginPassword = null;
   final user = Supabase.instance.client.auth.currentUser;
-  if (user == null || AuthPrefs.lockEnabledFor(user.id) || !await bioAvailable() || !context.mounted) return;
+  if (user == null || !await bioAvailable() || !context.mounted) return;
+  final needLogin = password != null && !AuthPrefs.hasBioLogin;
+  final needLock = !AuthPrefs.lockEnabledFor(user.id);
+  if (!needLogin && !needLock) return;
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       icon: Icon(Icons.face_retouching_natural, color: AppColors.accentText, size: 40),
       title: Text(tr('تفعيل Face ID / البصمة؟')),
-      content: Text(tr('افتح التطبيق بوجهك أو بصمتك بدل إدخال كلمة المرور. يمكنك تغيير ذلك لاحقًا من «حسابي».'),
-          style: const TextStyle(height: 1.6)),
+      content: Text(
+        tr('ادخل وافتح التطبيق بوجهك أو بصمتك بدل كتابة كلمة المرور. تُحفظ كلمة المرور مشفّرة على هذا الجهاز فقط ولا تُفك إلا بعد التحقق.'),
+        style: const TextStyle(height: 1.6),
+      ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('ليس الآن'))),
         FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('تفعيل'))),
       ],
     ),
   );
-  if (ok == true && context.mounted) await enableBioLock(context);
+  if (ok != true || !context.mounted) return;
+  if (needLogin) {
+    final done = await enableBioLogin(context, password);
+    if (done && needLock && context.mounted) await enableBioLock(context, quiet: true);
+  } else {
+    await enableBioLock(context);
+  }
 }
