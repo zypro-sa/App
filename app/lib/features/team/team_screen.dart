@@ -549,7 +549,6 @@ class _PermissionMatrix extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final m = member;
     final groups = <String, List<PermModule>>{};
     for (final mod in Permissions.modules) {
       groups.putIfAbsent(mod.group, () => []).add(mod);
