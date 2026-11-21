@@ -36,7 +36,7 @@ class TvScreen extends ConsumerStatefulWidget {
 }
 
 class _TvScreenState extends ConsumerState<TvScreen> {
-  static const _slides = 2;
+  int _slides = 1;
   int _slide = 0;
   bool _paused = false;
   bool _full = false;
@@ -45,6 +45,15 @@ class _TvScreenState extends ConsumerState<TvScreen> {
   Timer? _rotate;
   Timer? _clock;
   Timer? _refresh;
+
+  late (DateTime, DateTime, String?) _monthKey = _makeMonthKey();
+
+  static (DateTime, DateTime, String?) _makeMonthKey() {
+    final today = dateOnly(DateTime.now());
+    return (DateTime(today.year, today.month), today, null);
+  }
+
+  void _next() => setState(() => _slide = (_slide + 1) % _slides);
 
   static (DateTime, DateTime, String?) _makeKey() {
     final today = dateOnly(DateTime.now());
@@ -55,15 +64,19 @@ class _TvScreenState extends ConsumerState<TvScreen> {
   void initState() {
     super.initState();
     _rotate = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (!_paused) setState(() => _slide = (_slide + 1) % _slides);
+      if (!_paused) _next();
     });
     _clock = Timer.periodic(const Duration(seconds: 20), (_) => setState(() => _now = DateTime.now()));
     _refresh = Timer.periodic(const Duration(minutes: 5), (_) {
       final k = _makeKey();
       if (k != _key) {
-        setState(() => _key = k);
+        setState(() {
+          _key = k;
+          _monthKey = _makeMonthKey();
+        });
       } else {
         ref.invalidate(reportDashboardProvider(_key));
+        ref.invalidate(reportDashboardProvider(_monthKey));
       }
     });
   }
@@ -92,6 +105,20 @@ class _TvScreenState extends ConsumerState<TvScreen> {
     final allowed = me?.can(Permissions.reportsView) ?? false;
     final data = ref.watch(reportDashboardProvider(_key));
     final d = data.valueOrNull;
+    final month = allowed ? ref.watch(reportDashboardProvider(_monthKey)).valueOrNull : null;
+
+    // الشرائح المتاحة حسب البيانات والصلاحيات
+    final slides = <(String, Widget Function(ReportData, double))>[
+      (tr('نظرة عامة · آخر ٣٠ يومًا'), (d, s) => _OverviewSlide(d, s)),
+      (tr('الطلبات · الحالات والتعطل'), (d, s) => _RequestsSlide(d, s)),
+      (tr('الفريق · العمل المفتوح والالتزام'), (d, s) => _TeamSlide(d, s)),
+      if (d?.finance != null) (tr('المالية · التحصيل والمستحقات'), (d, s) => _FinanceSlide(d, s)),
+      (tr('العملاء والاجتماعات'), (d, s) => _ClientsSlide(d, s)),
+      if (month != null && month.goals.isNotEmpty)
+        (tr('أهداف {0}', [formatPattern('MMMM', DateTime.now())]), (_, s) => _GoalsSlide(month, s)),
+    ];
+    _slides = slides.length;
+    if (_slide >= _slides) _slide = 0;
 
     return Scaffold(
       backgroundColor: _Tv.bg,
@@ -105,7 +132,7 @@ class _TvScreenState extends ConsumerState<TvScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _header(s),
+                  _header(s, slides[_slide].$1),
                   SizedBox(height: 20 * s),
                   Expanded(
                     child: me == null
@@ -120,12 +147,12 @@ class _TvScreenState extends ConsumerState<TvScreen> {
                                   )
                                 : GestureDetector(
                                     behavior: HitTestBehavior.opaque,
-                                    onTap: () => setState(() => _slide = (_slide + 1) % _slides),
+                                    onTap: _next,
                                     child: AnimatedSwitcher(
                                       duration: const Duration(milliseconds: 600),
                                       child: KeyedSubtree(
                                         key: ValueKey(_slide),
-                                        child: _slide == 0 ? _OverviewSlide(d, s) : _TeamSlide(d, s),
+                                        child: slides[_slide].$2(d, s),
                                       ),
                                     ),
                                   ),
@@ -139,8 +166,7 @@ class _TvScreenState extends ConsumerState<TvScreen> {
     );
   }
 
-  Widget _header(double s) {
-    final titles = [tr('نظرة عامة · آخر ٣٠ يومًا'), tr('الفريق والتحصيل')];
+  Widget _header(double s, String title) {
     return Row(
       children: [
         Text('Zypro', style: TextStyle(fontSize: 30 * s, fontWeight: FontWeight.w800, color: _Tv.accent, letterSpacing: 0.5)),
@@ -148,7 +174,7 @@ class _TvScreenState extends ConsumerState<TvScreen> {
         Container(width: 1, height: 28 * s, color: _Tv.line),
         SizedBox(width: 16 * s),
         Expanded(
-          child: Text(titles[_slide], style: TextStyle(fontSize: 24 * s, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+          child: Text(title, style: TextStyle(fontSize: 24 * s, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
         for (var i = 0; i < _slides; i++)
           Container(
@@ -398,7 +424,6 @@ class _TeamSlide extends StatelessWidget {
       final v = ReportData.n(t['open_tasks']) + ReportData.n(t['open_requests']);
       return v > a ? v : a;
     });
-    final fin = d.finance;
     final gap = 16 * s;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -478,7 +503,30 @@ class _TeamSlide extends StatelessWidget {
         SizedBox(width: gap),
         Expanded(
           flex: 2,
-          child: fin != null ? _financeColumn(fin, gap) : _meetingsColumn(gap),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _BigKpi(
+                  s: s,
+                  label: tr('مهام منجزة'),
+                  value: fmtNum(ReportData.n(d.kpi['tasks_done'])),
+                  change: changeOf(ReportData.nn(d.kpi['tasks_done']), ReportData.nn(d.kpi['tasks_done_prev'])),
+                  color: _Tv.accent,
+                ),
+              ),
+              SizedBox(height: gap),
+              Expanded(
+                child: _BigKpi(
+                  s: s,
+                  label: tr('متوسط زمن الإنجاز'),
+                  value: fmtDays(ReportData.nn(d.kpi['avg_days'])),
+                  change: changeOf(ReportData.nn(d.kpi['avg_days']), ReportData.nn(d.kpi['avg_days_prev']), lowerIsBetter: true),
+                  color: _Tv.blue,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -495,81 +543,501 @@ class _TeamSlide extends StatelessWidget {
           ],
         ),
       );
+}
 
-  Widget _financeColumn(Map<String, dynamic> fin, double gap) {
-    final monthly = d.listOf(fin, 'monthly');
+String _tvMonth(String iso) {
+  final d = DateTime.tryParse(iso);
+  return d == null ? '' : formatPattern('MMM', d);
+}
+
+/// سطر في قوائم الشاشة: عنوان، وصف، وقيمة على الطرف
+class _Line extends StatelessWidget {
+  const _Line({required this.s, required this.title, this.subtitle, this.value, this.valueColor = _Tv.text});
+  final double s;
+  final String title;
+  final String? subtitle;
+  final String? value;
+  final Color valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 7 * s),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 19 * s, fontWeight: FontWeight.w600)),
+                if (subtitle != null && subtitle!.isNotEmpty)
+                  Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14 * s, color: _Tv.muted)),
+              ],
+            ),
+          ),
+          if (value != null) ...[
+            SizedBox(width: 12 * s),
+            Text(value!, style: TextStyle(fontSize: 19 * s, fontWeight: FontWeight.w700, color: valueColor)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+Widget _empty(double s) => Center(child: Text(tr('لا توجد بيانات'), style: TextStyle(fontSize: 20 * s, color: _Tv.muted)));
+
+Widget _kpiRow(double s, List<Widget> kpis) => SizedBox(
+      height: 150 * s,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < kpis.length; i++) ...[
+            if (i > 0) SizedBox(width: 16 * s),
+            Expanded(child: kpis[i]),
+          ],
+        ],
+      ),
+    );
+
+// ---------------- الطلبات ----------------
+class _RequestsSlide extends ConsumerWidget {
+  const _RequestsSlide(this.d, this.s);
+  final ReportData d;
+  final double s;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final labels = requestLabels(ref);
+    final k = d.kpi;
+    final entries = d.byStatus.entries.toList()..sort((a, b) => ReportData.n(b.value).compareTo(ReportData.n(a.value)));
+    final total = entries.fold<num>(0, (a, e) => a + ReportData.n(e.value));
+    final services = d.services.take(5).toList();
+    final gap = 16 * s;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          height: 150 * s,
+        _kpiRow(s, [
+          _BigKpi(
+            s: s,
+            label: tr('طلبات جديدة'),
+            value: fmtNum(ReportData.n(k['new'])),
+            change: changeOf(ReportData.nn(k['new']), ReportData.nn(k['new_prev'])),
+            color: _Tv.blue,
+          ),
+          _BigKpi(
+            s: s,
+            label: tr('طلبات منجزة'),
+            value: fmtNum(ReportData.n(k['closed'])),
+            change: changeOf(ReportData.nn(k['closed']), ReportData.nn(k['closed_prev'])),
+            color: _Tv.accent,
+          ),
+          _BigKpi(
+            s: s,
+            label: tr('بانتظار العميل أكثر من أسبوع'),
+            value: fmtNum(ReportData.n(d.alerts['waiting_long'])),
+            color: _Tv.amber,
+          ),
+        ]),
+        SizedBox(height: gap),
+        Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: _BigKpi(
+                child: _Box(
                   s: s,
-                  label: tr('المحصّل · ر.س'),
-                  value: moneyCompact(ReportData.n(fin['collected'])),
-                  change: changeOf(ReportData.nn(fin['collected']), ReportData.nn(fin['collected_prev'])),
-                  color: _Tv.blue,
+                  title: tr('المفتوحة حسب الحالة'),
+                  trailing: Text(fmtNum(total), style: TextStyle(fontSize: 22 * s, fontWeight: FontWeight.w800)),
+                  child: total == 0
+                      ? _empty(s)
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            StackedBar(
+                              height: 24 * s,
+                              trackColor: _Tv.line,
+                              parts: [for (final e in entries) (ReportData.n(e.value), statusColor(e.key, labels))],
+                            ),
+                            SizedBox(height: 12 * s),
+                            for (final e in entries.take(5))
+                              Padding(
+                                padding: EdgeInsets.symmetric(vertical: 6 * s),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 14 * s,
+                                      height: 14 * s,
+                                      decoration: BoxDecoration(color: statusColor(e.key, labels), shape: BoxShape.circle),
+                                    ),
+                                    SizedBox(width: 10 * s),
+                                    Expanded(child: Text(statusName(e.key, labels), style: TextStyle(fontSize: 19 * s))),
+                                    Text(fmtNum(ReportData.n(e.value)), style: TextStyle(fontSize: 22 * s, fontWeight: FontWeight.w800)),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
                 ),
               ),
               SizedBox(width: gap),
               Expanded(
-                child: _BigKpi(s: s, label: tr('المستحق · ر.س'), value: moneyCompact(ReportData.n(fin['due'])), color: _Tv.amber),
+                child: _Box(
+                  s: s,
+                  title: tr('الأطول تعطلًا'),
+                  child: d.stuck.isEmpty
+                      ? _empty(s)
+                      : Column(
+                          children: [
+                            for (final r in d.stuck)
+                              _Line(
+                                s: s,
+                                title: '#${r['number']} · ${r['title']}',
+                                subtitle: [if (r['client'] != null) '${r['client']}', if (r['assignee'] != null) '${r['assignee']}'].join(' · '),
+                                value: r['overdue_days'] != null
+                                    ? tr('متأخر {0} يوم', [r['overdue_days']])
+                                    : tr('بلا تحديث {0} يوم', [r['idle_days']]),
+                                valueColor: r['overdue_days'] != null ? _Tv.coral : _Tv.muted,
+                              ),
+                          ],
+                        ),
+                ),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                child: _Box(
+                  s: s,
+                  title: tr('حسب نوع الخدمة'),
+                  child: services.isEmpty
+                      ? _empty(s)
+                      : Column(
+                          children: [
+                            for (final e in services)
+                              _Line(
+                                s: s,
+                                title: serviceName('${e['name']}'),
+                                subtitle: tr('متوسط الإنجاز {0}', [fmtDays(ReportData.nn(e['avg_days']))]),
+                                value: fmtNum(ReportData.n(e['count'])),
+                                valueColor: _Tv.blue,
+                              ),
+                          ],
+                        ),
+                ),
               ),
             ],
           ),
         ),
-        SizedBox(height: gap),
-        Expanded(
-          child: _Box(
-            s: s,
-            title: tr('المفوتر والمحصّل · ٦ أشهر'),
-            child: LayoutBuilder(
-              builder: (context, c) => PairedColumns(
-                height: (c.maxHeight - 26 * s).clamp(40, 600).toDouble(),
-                labels: [for (final m in monthly) _month('${m['month']}')],
-                a: [for (final m in monthly) ReportData.n(m['collected'])],
-                b: [for (final m in monthly) ReportData.n(m['billed'])],
-                colorA: _Tv.blue,
-                colorB: _Tv.line,
-                labelStyle: TextStyle(fontSize: 13 * s, color: _Tv.muted),
-              ),
-            ),
-          ),
-        ),
       ],
     );
   }
+}
 
-  Widget _meetingsColumn(double gap) {
-    final m = d.meetings;
-    final dt = d.decisionTasks;
-    final dtTotal = ReportData.n(dt['total']);
+// ---------------- المالية ----------------
+class _FinanceSlide extends StatelessWidget {
+  const _FinanceSlide(this.d, this.s);
+  final ReportData d;
+  final double s;
+
+  @override
+  Widget build(BuildContext context) {
+    final fin = d.finance ?? const <String, dynamic>{};
+    final monthly = d.listOf(fin, 'monthly');
+    final late = d.listOf(fin, 'late');
+    final aging = fin['aging'] is Map ? Map<String, dynamic>.from(fin['aging'] as Map) : const <String, dynamic>{};
+    final agingParts = [
+      (tr('٠–٣٠ يومًا'), ReportData.n(aging['a0_30']), _Tv.accent),
+      (tr('٣١–٦٠ يومًا'), ReportData.n(aging['a31_60']), _Tv.amber),
+      (tr('أكثر من ٦٠'), ReportData.n(aging['a60']), _Tv.coral),
+    ];
+    final gap = 16 * s;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          height: 150 * s,
-          child: _BigKpi(s: s, label: tr('اجتماعات منعقدة'), value: fmtNum(ReportData.n(m['done'])), color: _Tv.blue),
-        ),
+        _kpiRow(s, [
+          _BigKpi(
+            s: s,
+            label: tr('المحصّل · ر.س'),
+            value: moneyCompact(ReportData.n(fin['collected'])),
+            change: changeOf(ReportData.nn(fin['collected']), ReportData.nn(fin['collected_prev'])),
+            color: _Tv.blue,
+          ),
+          _BigKpi(s: s, label: tr('المفوتر · ر.س'), value: moneyCompact(ReportData.n(fin['billed']))),
+          _BigKpi(s: s, label: tr('المستحق · ر.س'), value: moneyCompact(ReportData.n(fin['due'])), color: _Tv.amber),
+        ]),
         SizedBox(height: gap),
         Expanded(
-          child: _BigKpi(
-            s: s,
-            label: tr('تنفيذ قرارات الاجتماعات'),
-            value: dtTotal == 0 ? '—' : fmtPct(ReportData.n(dt['done']) * 100 / dtTotal),
-            color: _Tv.accent,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                flex: 3,
+                child: _Box(
+                  s: s,
+                  title: tr('المفوتر والمحصّل · ٦ أشهر'),
+                  child: monthly.isEmpty
+                      ? _empty(s)
+                      : LayoutBuilder(
+                          builder: (context, c) => PairedColumns(
+                            height: (c.maxHeight - 26 * s).clamp(40, 600).toDouble(),
+                            labels: [for (final m in monthly) _tvMonth('${m['month']}')],
+                            a: [for (final m in monthly) ReportData.n(m['collected'])],
+                            b: [for (final m in monthly) ReportData.n(m['billed'])],
+                            colorA: _Tv.blue,
+                            colorB: _Tv.line,
+                            labelStyle: TextStyle(fontSize: 13 * s, color: _Tv.muted),
+                          ),
+                        ),
+                ),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                flex: 2,
+                child: _Box(
+                  s: s,
+                  title: tr('أعمار المستحقات'),
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, c) {
+                            final size = (c.maxHeight < c.maxWidth ? c.maxHeight : c.maxWidth).clamp(60, 400).toDouble();
+                            return Center(
+                              child: DonutChart(
+                                size: size,
+                                thickness: size / 8,
+                                trackColor: _Tv.line,
+                                parts: [for (final p in agingParts) (p.$2, p.$3)],
+                                center: Text(moneyCompact(agingParts.fold<num>(0, (a, p) => a + p.$2)),
+                                    style: TextStyle(fontSize: 24 * s, fontWeight: FontWeight.w800)),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      SizedBox(height: 10 * s),
+                      for (final p in agingParts)
+                        Padding(
+                          padding: EdgeInsets.symmetric(vertical: 3 * s),
+                          child: Row(
+                            children: [
+                              Container(width: 12 * s, height: 12 * s, decoration: BoxDecoration(color: p.$3, borderRadius: BorderRadius.circular(3 * s))),
+                              SizedBox(width: 8 * s),
+                              Expanded(child: Text(p.$1, style: TextStyle(fontSize: 15 * s, color: _Tv.muted))),
+                              Text(moneyCompact(p.$2), style: TextStyle(fontSize: 16 * s, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                flex: 2,
+                child: _Box(
+                  s: s,
+                  title: tr('الأكثر تأخرًا في السداد'),
+                  child: late.isEmpty
+                      ? _empty(s)
+                      : Column(
+                          children: [
+                            for (final l in late)
+                              _Line(
+                                s: s,
+                                title: '${l['client']}',
+                                subtitle: tr('متأخرة {0} يوم', [l['days']]),
+                                value: moneyCompact(ReportData.n(l['remaining'])),
+                                valueColor: _Tv.coral,
+                              ),
+                          ],
+                        ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
     );
   }
+}
 
-  static String _month(String iso) {
-    final d = DateTime.tryParse(iso);
-    return d == null ? '' : formatPattern('MMM', d);
+// ---------------- العملاء والاجتماعات ----------------
+class _ClientsSlide extends StatelessWidget {
+  const _ClientsSlide(this.d, this.s);
+  final ReportData d;
+  final double s;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = d.clients ?? const <String, dynamic>{};
+    final idle = d.listOf(c, 'idle');
+    final top = d.listOf(c, 'top');
+    final m = d.meetings;
+    final parts = [
+      (tr('عُقد'), ReportData.n(m['done']), _Tv.accent),
+      (tr('مجدول'), ReportData.n(m['scheduled']), _Tv.blue),
+      (tr('مؤجل'), ReportData.n(m['postponed']), _Tv.amber),
+      (tr('أُلغي'), ReportData.n(m['cancelled']), _Tv.coral),
+    ];
+    final mTotal = parts.fold<num>(0, (a, p) => a + p.$2);
+    final dt = d.decisionTasks, pr = d.promises;
+    final dtTotal = ReportData.n(dt['total']), prTotal = ReportData.n(pr['total']);
+    final gap = 16 * s;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _kpiRow(s, [
+          _BigKpi(s: s, label: tr('عملاء نشطون'), value: fmtNum(ReportData.n(c['active'])), color: _Tv.accent),
+          _BigKpi(
+            s: s,
+            label: tr('عملاء جدد'),
+            value: fmtNum(ReportData.n(d.kpi['new_clients'])),
+            change: changeOf(ReportData.nn(d.kpi['new_clients']), ReportData.nn(d.kpi['new_clients_prev'])),
+          ),
+          _BigKpi(
+            s: s,
+            label: tr('تنفيذ قرارات الاجتماعات'),
+            value: dtTotal == 0 ? '—' : fmtPct(ReportData.n(dt['done']) * 100 / dtTotal),
+            color: _Tv.blue,
+          ),
+          _BigKpi(
+            s: s,
+            label: tr('الوفاء بالوعود للعملاء'),
+            value: prTotal == 0 ? '—' : fmtPct(ReportData.n(pr['on_time']) * 100 / prTotal),
+            color: _Tv.amber,
+          ),
+        ]),
+        SizedBox(height: gap),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _Box(
+                  s: s,
+                  title: tr('الاجتماعات في الفترة'),
+                  trailing: Text(fmtNum(mTotal), style: TextStyle(fontSize: 22 * s, fontWeight: FontWeight.w800)),
+                  child: mTotal == 0
+                      ? _empty(s)
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            StackedBar(height: 24 * s, trackColor: _Tv.line, parts: [for (final p in parts) (p.$2, p.$3)]),
+                            SizedBox(height: 12 * s),
+                            for (final p in parts)
+                              Padding(
+                                padding: EdgeInsets.symmetric(vertical: 6 * s),
+                                child: Row(
+                                  children: [
+                                    Container(width: 14 * s, height: 14 * s, decoration: BoxDecoration(color: p.$3, shape: BoxShape.circle)),
+                                    SizedBox(width: 10 * s),
+                                    Expanded(child: Text(p.$1, style: TextStyle(fontSize: 19 * s))),
+                                    Text(fmtNum(p.$2), style: TextStyle(fontSize: 22 * s, fontWeight: FontWeight.w800)),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                ),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                child: _Box(
+                  s: s,
+                  title: d.canFinance ? tr('أعلى العملاء قيمة · ١٢ شهرًا') : tr('أكثر العملاء طلبات'),
+                  child: top.isEmpty
+                      ? _empty(s)
+                      : Column(
+                          children: [
+                            for (final t in top)
+                              _Line(
+                                s: s,
+                                title: '${t['name']}',
+                                subtitle: tr('{0} طلب', [t['requests']]),
+                                value: t['value'] == null ? null : moneyCompact(ReportData.n(t['value'])),
+                                valueColor: _Tv.blue,
+                              ),
+                          ],
+                        ),
+                ),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                child: _Box(
+                  s: s,
+                  title: tr('عملاء يحتاجون تواصلًا'),
+                  child: idle.isEmpty
+                      ? Center(child: Text(tr('كل العملاء على تواصل'), style: TextStyle(fontSize: 20 * s, color: _Tv.muted)))
+                      : Column(
+                          children: [
+                            for (final i in idle.take(5))
+                              _Line(s: s, title: '${i['name']}', value: tr('منذ {0} يوم', [i['days']]), valueColor: _Tv.amber),
+                          ],
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------- الأهداف ----------------
+class _GoalsSlide extends StatelessWidget {
+  const _GoalsSlide(this.d, this.s);
+  final ReportData d;
+  final double s;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final pace = today.day / DateTime(today.year, today.month + 1, 0).day;
+    num? actual(String key) => switch (key) {
+          'requests_closed' => ReportData.nn(d.kpi['closed']),
+          'collected' => ReportData.nn(d.finance?['collected']),
+          'on_time' => ReportData.nn(d.kpi['on_time']),
+          'new_clients' => ReportData.nn(d.kpi['new_clients']),
+          'tasks_done' => ReportData.nn(d.kpi['tasks_done']),
+          'meetings_held' => ReportData.nn(d.kpi['meetings_held']),
+          _ => null,
+        };
+    final goals = GoalMetric.all.where((g) => d.goals[g.key] != null && (g.key != 'collected' || d.canFinance)).toList();
+    String fmt(GoalMetric g, num? v) => v == null ? '—' : g.percent ? fmtPct(v) : g.money ? moneyCompact(v) : fmtNum(v);
+    return _Box(
+      s: s,
+      title: tr('مضى {0}٪ من الشهر', [(pace * 100).round()]),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          for (final g in goals)
+            () {
+              final target = ReportData.n(d.goals[g.key]);
+              final v = actual(g.key);
+              final ratio = v == null || target == 0 ? 0.0 : (v / target).toDouble();
+              final onTrack = g.percent ? ratio >= 1 : ratio >= pace;
+              final color = ratio >= 1 ? _Tv.accent : onTrack ? _Tv.blue : _Tv.amber;
+              return Row(
+                children: [
+                  SizedBox(width: 230 * s, child: Text(tr(g.labelAr), style: TextStyle(fontSize: 21 * s, fontWeight: FontWeight.w600))),
+                  Expanded(child: ProgressBar(ratio: ratio, color: color, height: 22 * s, trackColor: _Tv.line)),
+                  SizedBox(width: 16 * s),
+                  SizedBox(
+                    width: 230 * s,
+                    child: Text.rich(
+                      TextSpan(children: [
+                        TextSpan(text: fmt(g, v), style: TextStyle(fontSize: 24 * s, fontWeight: FontWeight.w800, color: color)),
+                        TextSpan(text: ' / ${fmt(g, target)}', style: TextStyle(fontSize: 17 * s, color: _Tv.muted)),
+                      ]),
+                      textAlign: TextAlign.end,
+                    ),
+                  ),
+                ],
+              );
+            }(),
+        ],
+      ),
+    );
   }
 }
