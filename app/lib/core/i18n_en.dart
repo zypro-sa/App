@@ -1044,4 +1044,8 @@ const Map<String, String> enStrings = {
   'التحصيل': 'Collections',
   '{0} يوم بانتظار العميل': '{0} days waiting on client',
   'مفتوحة': 'Open',
+  'الطلبات · الحالات والتعطل': 'Requests · status & stuck',
+  'المالية · التحصيل والمستحقات': 'Finance · collections & receivables',
+  'متوسط الإنجاز {0}': 'Avg. completion {0}',
+  'المفوتر · ر.س': 'Billed · SAR',
 };
