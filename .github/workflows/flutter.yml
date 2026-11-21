@@ -23,5 +23,6 @@ jobs:
       - run: flutter pub get
       - run: dart format --output=none --set-exit-if-changed lib || true
       - run: flutter analyze --no-fatal-infos
+      - run: flutter test
       - name: Build web (check it compiles)
         run: flutter build web --release

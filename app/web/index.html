@@ -76,6 +76,46 @@
       return endpoint;
     };
 
+
+    // التعرّف على الكلام من المتصفح (مجاني، يعمل على Safari وChrome)
+    var zyproRec = null;
+    window.zyproSpeechSupported = function () {
+      return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    };
+    window.zyproSpeechStart = function (lang, continuous, onPartial, onDone, onError) {
+      var R = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!R) { onError('unsupported'); onDone(''); return; }
+      try { if (zyproRec) zyproRec.abort(); } catch (e) {}
+      var rec = new R();
+      zyproRec = rec;
+      rec.lang = lang;
+      rec.interimResults = true;
+      rec.continuous = !!continuous;
+      rec.maxAlternatives = 1;
+      var finalText = '';
+      var ended = false;
+      rec.onresult = function (e) {
+        var interim = '';
+        for (var i = e.resultIndex; i < e.results.length; i++) {
+          var t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) finalText += (finalText ? ' ' : '') + t.trim();
+          else interim += t;
+        }
+        onPartial((finalText + ' ' + interim).trim());
+      };
+      rec.onerror = function (e) { onError((e && e.error) || 'error'); };
+      rec.onend = function () {
+        if (ended) return;
+        ended = true;
+        zyproRec = null;
+        onDone(finalText);
+      };
+      try { rec.start(); } catch (e) { onError('start-failed'); ended = true; onDone(''); }
+    };
+    window.zyproSpeechStop = function () {
+      try { if (zyproRec) zyproRec.stop(); } catch (e) {}
+    };
+
     window.addEventListener('flutter-first-frame', function () {
       var s = document.getElementById('splash');
       if (s) s.remove();

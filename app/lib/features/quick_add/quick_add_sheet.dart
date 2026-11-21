@@ -11,6 +11,8 @@ import '../../data/section_repository.dart';
 import '../../widgets/forms.dart' show customFieldRows, missingRequired, promptNumber, money;
 import '../../widgets/common.dart';
 import '../../core/i18n.dart';
+import '../../core/voice/command_parser.dart';
+import '../../widgets/voice_input.dart';
 
 enum QuickAddType {
   task('مهمة'),
@@ -25,7 +27,7 @@ enum QuickAddType {
 }
 
 /// ٧ · إضافة سريعة
-Future<void> showQuickAdd(BuildContext context, {QuickAddType initial = QuickAddType.task}) {
+Future<void> showQuickAdd(BuildContext context, {QuickAddType initial = QuickAddType.task, bool voice = false}) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -33,13 +35,14 @@ Future<void> showQuickAdd(BuildContext context, {QuickAddType initial = QuickAdd
     useSafeArea: true,
     backgroundColor: AppColors.surface,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-    builder: (_) => QuickAddSheet(initial: initial),
+    builder: (_) => QuickAddSheet(initial: initial, startVoice: voice),
   );
 }
 
 class QuickAddSheet extends ConsumerStatefulWidget {
-  const QuickAddSheet({super.key, this.initial = QuickAddType.task});
+  const QuickAddSheet({super.key, this.initial = QuickAddType.task, this.startVoice = false});
   final QuickAddType initial;
+  final bool startVoice;
 
   @override
   ConsumerState<QuickAddSheet> createState() => _QuickAddSheetState();
@@ -62,6 +65,65 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   final _location = TextEditingController();
   final Map<String, dynamic> _custom = {};
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.startVoice) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _voice());
+    }
+  }
+
+  bool _allowed(QuickAddType t, Profile? me) => switch (t) {
+        QuickAddType.request => me?.can(Permissions.requestsManage) ?? false,
+        QuickAddType.meeting => me?.can(Permissions.meetingsManage) ?? false,
+        _ => true,
+      };
+
+  Future<void> _voice() async {
+    final text = await listenForSpeech(context);
+    if (text == null || text.trim().isEmpty || !mounted) return;
+    _fillFrom(text);
+  }
+
+  /// يقرأ الجملة ويعبّئ النوع والعنوان والموعد والعميل والمسؤول والأولوية.
+  void _fillFrom(String text) {
+    final clients = ref.read(clientsProvider).valueOrNull ?? const <Client>[];
+    final team = ref.read(teamProvider).valueOrNull ?? const <Profile>[];
+    final me = ref.read(profileProvider).valueOrNull;
+    final p = parseCommand(
+      text,
+      clients: [for (final c in clients) NamedRef(c.id, c.name)],
+      team: [for (final m in team) NamedRef(m.id, m.name)],
+    );
+    final type = switch (p.intent) {
+      VoiceIntent.task => QuickAddType.task,
+      VoiceIntent.request => QuickAddType.request,
+      VoiceIntent.meeting => QuickAddType.meeting,
+      VoiceIntent.followup => QuickAddType.followup,
+      VoiceIntent.note => QuickAddType.note,
+      null => null,
+    };
+    setState(() {
+      if (type != null && type != _type && _allowed(type, me)) {
+        _type = type;
+        _custom.clear();
+      }
+      _title.text = _type == QuickAddType.note ? text.trim() : p.title;
+      if (p.when != null) {
+        final w = p.when!;
+        _when = (_type == QuickAddType.meeting && !p.hasTime) ? DateTime(w.year, w.month, w.day, 10) : w;
+      }
+      if (p.clientId != null) _clientId = p.clientId;
+      if (p.assigneeId != null && (me?.can(Permissions.tasksAssign) ?? false)) _assigneeId = p.assigneeId;
+      if (p.priority == 'urgent') _priority = Priority.urgent;
+      if (p.priority == 'high') _priority = Priority.high;
+      if (_type == QuickAddType.followup) {
+        _direction = p.waiting ? FollowupDirection.waiting : FollowupDirection.promised;
+      }
+    });
+    showSnack(context, tr('عُبّئت الحقول · راجعها ثم احفظ'));
+  }
 
   @override
   void dispose() {
@@ -222,11 +284,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
     final team = ref.watch(teamProvider).valueOrNull ?? const <Profile>[];
     final me = ref.watch(profileProvider).valueOrNull;
     final canAssign = me?.can(Permissions.tasksAssign) ?? false;
-    final allowedTypes = QuickAddType.values.where((t) => switch (t) {
-          QuickAddType.request => me?.can(Permissions.requestsManage) ?? false,
-          QuickAddType.meeting => me?.can(Permissions.meetingsManage) ?? false,
-          _ => true,
-        }).toList();
+    final allowedTypes = QuickAddType.values.where((t) => _allowed(t, me)).toList();
     if (!allowedTypes.contains(_type)) _type = QuickAddType.task;
     final entity = _entity;
     final cfg = entity == null
@@ -247,6 +305,11 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               children: [
                 Expanded(
                   child: Text(tr('إضافة سريعة'), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                ),
+                IconButton.filledTonal(
+                  tooltip: tr('إضافة بالصوت'),
+                  onPressed: _voice,
+                  icon: const Icon(Icons.mic_none),
                 ),
                 TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('إلغاء'))),
               ],
@@ -281,6 +344,21 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                 hintText: _hint,
               ),
             ),
+            if (_type != QuickAddType.note)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  onPressed: () {
+                    if (_title.text.trim().isEmpty) {
+                      showSnack(context, tr('اكتب أو أملِ الجملة أولًا، مثل: اجتماع مع العميل الأحد الساعة ١٠'));
+                    } else {
+                      _fillFrom(_title.text);
+                    }
+                  },
+                  icon: const Icon(Icons.auto_fix_high, size: 18),
+                  label: Text(tr('تعبئة الحقول من النص')),
+                ),
+              ),
             if (_type != QuickAddType.note) ...[
               const SizedBox(height: 16),
               CardBox(
