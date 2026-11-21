@@ -15,7 +15,9 @@ import '../features/notifications/notification_settings_screen.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/projects/project_detail_screen.dart';
 import '../features/projects/projects_screen.dart';
+import '../features/reports/report_list_screen.dart';
 import '../features/reports/reports_screen.dart';
+import '../features/reports/tv_screen.dart';
 import '../features/settings/bulk_manage_screen.dart';
 import '../features/settings/section_settings_screen.dart';
 import '../features/settings/settings_screen.dart';
@@ -76,6 +78,8 @@ final appRouter = GoRouter(
   routes: [
     GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
     GoRoute(path: '/set-password', builder: (_, __) => const SetPasswordScreen()),
+    // شاشة المكتب: خارج الإطار (بلا شريط تنقل)
+    GoRoute(path: '/tv', builder: (_, __) => const TvScreen()),
     StatefulShellRoute.indexedStack(
       builder: (context, state, shell) => AppShell(shell: shell),
       branches: [
@@ -126,7 +130,26 @@ final appRouter = GoRouter(
               GoRoute(path: 'account', builder: (_, __) => const AccountScreen()),
               GoRoute(path: 'notifications', builder: (_, __) => const NotificationSettingsScreen()),
               GoRoute(path: 'notes', builder: (_, __) => const NotesScreen()),
-              GoRoute(path: 'reports', builder: (_, __) => const ReportsScreen()),
+              GoRoute(
+                path: 'reports',
+                builder: (_, __) => const ReportsScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'list',
+                    builder: (_, s) {
+                      final q = s.uri.queryParameters;
+                      final today = DateTime.now();
+                      return ReportListScreen(
+                        kind: q['kind'] ?? 'open',
+                        from: DateTime.tryParse(q['from'] ?? '') ?? today.subtract(const Duration(days: 29)),
+                        to: DateTime.tryParse(q['to'] ?? '') ?? today,
+                        member: q['member'],
+                        title: q['title'],
+                      );
+                    },
+                  ),
+                ],
+              ),
               GoRoute(
                 path: 'team',
                 builder: (_, __) => const TeamScreen(),

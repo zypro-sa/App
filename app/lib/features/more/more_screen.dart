@@ -28,7 +28,7 @@ class MoreScreen extends ConsumerWidget {
       _Section(tr('المتابعات'), Icons.schedule, AppColors.waiting, AppColors.waitingSoft, () => context.go('/more/followups')),
       if (can(Permissions.financeManage)) _Section(tr('المالية'), Icons.receipt_long_outlined, AppColors.urgent, AppColors.urgentSoft, () => context.go('/more/finance')),
       _Section(tr('الملاحظات'), Icons.sticky_note_2_outlined, AppColors.subtle, AppColors.neutralSoft, () => context.go('/more/notes')),
-      if (can(Permissions.reportsView)) _Section(tr('التقارير'), Icons.bar_chart, AppColors.primary, AppColors.primarySoft, () => context.go('/more/reports')),
+      _Section(can(Permissions.reportsView) ? tr('التقارير') : tr('تقريري'), Icons.bar_chart, AppColors.primary, AppColors.primarySoft, () => context.go('/more/reports')),
     ];
 
     return Scaffold(
