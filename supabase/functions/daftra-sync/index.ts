@@ -380,7 +380,20 @@ async function sync(db: SupabaseClient, dry: boolean) {
       seenQ.add(did);
       const number = `DFQ-${String(de.no ?? did).trim()}`;
       const date = day(de.date) ?? new Date().toISOString().slice(0, 10);
-      const status = convertedEstimates.has(did) ? "accepted" : (date < monthAgo ? "expired" : "sent");
+      // هل تحوّل العرض لفاتورة؟ (١) الفاتورة تشير للعرض، (٢) حالة العرض في دفترة،
+      // (٣) فاتورة لنفس العميل بنفس المبلغ في تاريخ العرض أو بعده
+      const total = num(de.summary_total);
+      const estStatus = String(de.payment_status ?? de.status ?? "");
+      const bySource = convertedEstimates.has(did) ||
+        dInvoices.some((i) => String(i.source_id ?? "") === did && /estimate|quot/i.test(String(i.source_type ?? "")));
+      const byAmount = !bySource && dInvoices.find((i) =>
+        !isDraft(i) && String(i.client_id) === String(de.client_id) &&
+        Math.abs(num(i.summary_total) - total) < 1 && (day(i.date) ?? "") >= date);
+      const accepted = bySource || !!byAmount;
+      const status = accepted ? "accepted" : (date < monthAgo ? "expired" : "sent");
+      r.details.push(`عرض ${number} (${total}): ${
+        bySource ? "تحوّل لفاتورة" : byAmount ? `تحوّل لفاتورة ${byAmount.no} (نفس المبلغ)` : status === "expired" ? "منتهٍ (أقدم من ٣٠ يومًا)" : "بانتظار الرد"
+      } · حالته في دفترة: ${estStatus || "—"}`);
       const fields = {
         number, client_id: clientId, amount: Math.max(num(de.summary_total), 0), vat_amount: 0,
         currency: String(de.currency_code || "SAR").slice(0, 3), status, sent_at: date, daftra_id: de.id,

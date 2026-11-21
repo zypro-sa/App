@@ -267,7 +267,7 @@ class _DaftraScreenState extends ConsumerState<DaftraScreen> {
           ])),
           if (details.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(tr('تفاصيل المرتجعات'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            Text(tr('التفاصيل'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
             for (final d in details)
               Text('• $d', textDirection: TextDirection.rtl, style: TextStyle(fontSize: 12, color: AppColors.muted)),
           ],
