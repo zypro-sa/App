@@ -43,8 +43,10 @@ Deno.serve(async (req) => {
       .eq("id", auth.user.id)
       .single();
     if (meError) return json({ error: `تعذّر قراءة الملف الشخصي: ${meError.message}` }, 500);
-    if (!me || me.role !== "owner" || !me.is_active) {
-      return json({ error: "إضافة الأعضاء للمالك فقط" }, 403);
+    if (!me || !me.is_active) return json({ error: "الحساب غير مفعّل" }, 403);
+    if (me.role !== "owner") {
+      const { data: allowed } = await admin.rpc("perm_of", { p_user: auth.user.id, p: "team.add" });
+      if (allowed !== true) return json({ error: "ليست لديك صلاحية إضافة الأعضاء" }, 403);
     }
 
     // ٢. التحقق من البيانات

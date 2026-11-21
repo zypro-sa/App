@@ -27,7 +27,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final me = ref.watch(profileProvider).valueOrNull;
     bool can(String k) => me?.can(k) ?? false;
-    if (me != null && !can(Permissions.settingsFields) && !can(Permissions.settingsLists) && !can(Permissions.dataDelete)) {
+    if (me != null && !can(Permissions.settingsFields) && !can(Permissions.settingsLists) && !can(Permissions.dataDelete) && !can(Permissions.settingsListsView) && !can(Permissions.settingsFieldsView) && !can(Permissions.statusesView)) {
       return Scaffold(appBar: sectionAppBar(tr('لوحة التحكم')), body: EmptyState(tr('ليست لديك صلاحية لوحة التحكم'), icon: Icons.lock_outline));
     }
     final counts = ref.watch(fieldCountsProvider).valueOrNull ?? const {};
