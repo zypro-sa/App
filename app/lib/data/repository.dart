@@ -21,7 +21,9 @@ String _isoDate(DateTime d) =>
 class Repository {
   // ---------------- المستخدم ----------------
   Future<Profile?> currentProfile() async {
-    final row = await _db.from('profiles').select().eq('id', _uid).maybeSingle();
+    final uid = _db.auth.currentUser?.id;
+    if (uid == null) return null; // لم يسجّل الدخول بعد
+    final row = await _db.from('profiles').select().eq('id', uid).maybeSingle();
     return row == null ? null : Profile.fromMap(row);
   }
 
@@ -444,9 +446,16 @@ class Repository {
 // ---------------- مزوّدات Riverpod ----------------
 final repositoryProvider = Provider((_) => Repository());
 
-final profileProvider = FutureProvider<Profile?>(
-  (ref) => ref.watch(repositoryProvider).currentProfile(),
+/// المستخدم الحالي — يتغير عند الدخول والخروج فقط (لا عند تجديد الجلسة)
+final authUserIdProvider = StreamProvider<String?>(
+  (ref) => _db.auth.onAuthStateChange.map((s) => s.session?.user.id).distinct(),
 );
+
+final profileProvider = FutureProvider<Profile?>((ref) {
+  // يُعاد تحميل الملف عند تغيّر المستخدم، حتى لا يبقى خطأ محفوظ من شاشة الدخول
+  ref.watch(authUserIdProvider);
+  return ref.watch(repositoryProvider).currentProfile();
+});
 
 final homeSummaryProvider = FutureProvider<HomeSummary>(
   (ref) => ref.watch(repositoryProvider).homeSummary(),
