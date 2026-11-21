@@ -11,8 +11,30 @@ class ChartColors {
   static const slate = Color(0xFF8A8D99);
 }
 
-/// منحنى مساحة مع خط هدف اختياري
-class AreaChart extends StatelessWidget {
+/// تلميح موحّد يظهر عند مرور الماوس (أو الضغط المطوّل في الجوال)
+class ChartTip extends StatelessWidget {
+  const ChartTip({super.key, required this.message, required this.child});
+  final String? message;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (message == null || message!.isEmpty) return child;
+    return Tooltip(
+      message: message,
+      waitDuration: const Duration(milliseconds: 250),
+      showDuration: const Duration(seconds: 4),
+      preferBelow: false,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      textStyle: const TextStyle(color: Colors.white, fontSize: 13, height: 1.5),
+      decoration: BoxDecoration(color: const Color(0xF02A2A33), borderRadius: BorderRadius.circular(10)),
+      child: child,
+    );
+  }
+}
+
+/// منحنى مساحة مع خط هدف اختياري، وتتبّع للماوس يُظهر قيمة كل نقطة
+class AreaChart extends StatefulWidget {
   const AreaChart({
     super.key,
     required this.values,
@@ -22,6 +44,7 @@ class AreaChart extends StatelessWidget {
     this.gridColor = const Color(0x22888888),
     this.strokeWidth = 3,
     this.semanticLabel,
+    this.tooltipBuilder,
   });
   final List<num> values;
   final num? target;
@@ -31,19 +54,94 @@ class AreaChart extends StatelessWidget {
   final double strokeWidth;
   final String? semanticLabel;
 
+  /// نص التلميح لكل نقطة (اختياري)
+  final String Function(int index)? tooltipBuilder;
+
   @override
-  Widget build(BuildContext context) => Semantics(
-        label: semanticLabel,
-        child: SizedBox(
-          height: height,
-          width: double.infinity,
-          child: CustomPaint(painter: _AreaPainter(values, target, color, gridColor, strokeWidth)),
-        ),
-      );
+  State<AreaChart> createState() => _AreaChartState();
+}
+
+class _AreaChartState extends State<AreaChart> {
+  int? _hover;
+
+  void _track(Offset p, double width) {
+    final n = widget.values.length;
+    if (n == 0 || widget.tooltipBuilder == null) return;
+    const pad = 6.0;
+    final w = width - pad * 2;
+    final int i = n == 1 ? 0 : (((p.dx - pad) / w) * (n - 1)).round().clamp(0, n - 1).toInt();
+    if (i != _hover) setState(() => _hover = i);
+  }
+
+  void _clear() {
+    if (_hover != null) setState(() => _hover = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: widget.semanticLabel,
+      child: SizedBox(
+        height: widget.height,
+        width: double.infinity,
+        child: LayoutBuilder(builder: (context, c) {
+          final width = c.maxWidth;
+          final chart = CustomPaint(
+            size: Size(width, widget.height),
+            painter: _AreaPainter(widget.values, widget.target, widget.color, widget.gridColor, widget.strokeWidth, _hover),
+          );
+          if (widget.tooltipBuilder == null) return chart;
+          final n = widget.values.length;
+          const pad = 6.0;
+          final hx = _hover == null ? 0.0 : pad + (n == 1 ? (width - pad * 2) / 2 : _hover! * (width - pad * 2) / (n - 1));
+          const tipW = 170.0;
+          return MouseRegion(
+            onHover: (e) => _track(e.localPosition, width),
+            onExit: (_) => _clear(),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (e) => _track(e.localPosition, width),
+              onLongPressStart: (e) => _track(e.localPosition, width),
+              onLongPressMoveUpdate: (e) => _track(e.localPosition, width),
+              onLongPressEnd: (_) => _clear(),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  chart,
+                  if (_hover != null && _hover! < n)
+                    Positioned(
+                      left: (hx - tipW / 2).clamp(0.0, (width - tipW) < 0 ? 0.0 : (width - tipW)).toDouble(),
+                      top: 0,
+                      width: tipW,
+                      child: IgnorePointer(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: const Color(0xF02A2A33),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 2))],
+                          ),
+                          child: Text(
+                            widget.tooltipBuilder!(_hover!),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.45),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
 }
 
 class _AreaPainter extends CustomPainter {
-  _AreaPainter(this.values, this.target, this.color, this.grid, this.stroke);
+  _AreaPainter(this.values, this.target, this.color, this.grid, this.stroke, this.hover);
+  final int? hover;
   final List<num> values;
   final num? target;
   final Color color;
@@ -100,11 +198,19 @@ class _AreaPainter extends CustomPainter {
     );
     final last = pt(values.length - 1);
     canvas.drawCircle(last, stroke + 1.5, Paint()..color = color);
+    if (hover != null && hover! < values.length) {
+      final h = pt(hover!);
+      canvas.drawLine(Offset(h.dx, pad), Offset(h.dx, size.height - pad), Paint()
+        ..color = color.withValues(alpha: 0.45)
+        ..strokeWidth = 1.2);
+      canvas.drawCircle(h, stroke + 3.5, Paint()..color = color.withValues(alpha: 0.25));
+      canvas.drawCircle(h, stroke + 1.5, Paint()..color = color);
+    }
   }
 
   @override
   bool shouldRepaint(covariant _AreaPainter old) =>
-      old.values != values || old.target != target || old.color != color || old.grid != grid;
+      old.values != values || old.target != target || old.color != color || old.grid != grid || old.hover != hover;
 }
 
 /// خط اتجاه صغير داخل بطاقة المؤشر
@@ -164,7 +270,9 @@ class DonutChart extends StatelessWidget {
     this.center,
     this.trackColor = const Color(0x22888888),
     this.semanticLabel,
+    this.tooltip,
   });
+  final String? tooltip;
   final List<(num, Color)> parts;
   final double size;
   final double thickness;
@@ -173,7 +281,9 @@ class DonutChart extends StatelessWidget {
   final String? semanticLabel;
 
   @override
-  Widget build(BuildContext context) => Semantics(
+  Widget build(BuildContext context) => ChartTip(
+        message: tooltip,
+        child: Semantics(
         label: semanticLabel,
         child: SizedBox(
           width: size,
@@ -186,6 +296,7 @@ class DonutChart extends StatelessWidget {
             ],
           ),
         ),
+      ),
       );
 }
 
@@ -218,8 +329,11 @@ class _DonutPainter extends CustomPainter {
 
 /// شريط واحد مقسّم بالنسب (للتوزيع على الحالات)
 class StackedBar extends StatelessWidget {
-  const StackedBar({super.key, required this.parts, this.height = 16, this.trackColor = const Color(0x22888888)});
+  const StackedBar({super.key, required this.parts, this.height = 16, this.trackColor = const Color(0x22888888), this.tips});
   final List<(num, Color)> parts;
+
+  /// تلميح لكل جزء (بنفس ترتيب parts)
+  final List<String>? tips;
   final double height;
   final Color trackColor;
 
@@ -234,8 +348,15 @@ class StackedBar extends StatelessWidget {
             ? Container(color: trackColor)
             : Row(
                 children: [
-                  for (final (v, c) in parts)
-                    if (v > 0) Expanded(flex: (v * 1000 / total).round().clamp(1, 1000000), child: Container(color: c)),
+                  for (var i = 0; i < parts.length; i++)
+                    if (parts[i].$1 > 0)
+                      Expanded(
+                        flex: (parts[i].$1 * 1000 / total).round().clamp(1, 1000000),
+                        child: ChartTip(
+                          message: tips != null && i < tips!.length ? tips![i] : null,
+                          child: Container(color: parts[i].$2),
+                        ),
+                      ),
                 ],
               ),
       ),
@@ -281,7 +402,9 @@ class PairedColumns extends StatelessWidget {
     required this.colorB,
     this.height = 120,
     this.labelStyle,
+    this.tooltipBuilder,
   });
+  final String Function(int index)? tooltipBuilder;
   final List<String> labels;
   final List<num> a;
   final List<num> b;
@@ -301,7 +424,9 @@ class PairedColumns extends StatelessWidget {
         children: [
           for (var i = 0; i < labels.length; i++)
             Expanded(
-              child: Column(
+              child: ChartTip(
+                message: tooltipBuilder?.call(i),
+                child: Column(
                 children: [
                   SizedBox(
                     height: height,
@@ -318,6 +443,7 @@ class PairedColumns extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(labels[i], style: labelStyle ?? const TextStyle(fontSize: 10), maxLines: 1),
                 ],
+              ),
               ),
             ),
         ],
