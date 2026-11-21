@@ -14,6 +14,7 @@ import '../../data/section_repository.dart';
 import '../../widgets/charts.dart';
 import '../../widgets/common.dart';
 import '../../widgets/forms.dart';
+import 'report_advanced.dart';
 import 'report_common.dart';
 import 'report_export.dart';
 
@@ -77,6 +78,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final whole = member == null;
     final tabs = <(String, Widget Function(ReportData))>[
       (tr('نظرة عامة'), (r) => _OverviewTab(r, filter)),
+      (tr('تقارير مخصصة'), (_) => const CustomReportsTab()),
       (tr('الطلبات'), (r) => _RequestsTab(r, filter)),
       if (whole) (tr('الفريق'), (r) => _TeamTab(r, filter, onMember: (id) => setState(() => _member = id))),
       if (whole && canFinance) (tr('المالية'), (r) => _FinanceTab(r, filter)),
@@ -321,27 +323,27 @@ class _Dashboard extends StatelessWidget {
         const SizedBox(height: 14),
         ResponsiveGrid(children: [
           KpiCard(
-            label: tr('طلبات منجزة'),
+            label: tr('طلبات منجزة'), info: kpiInfo('closed'), prev: fmtNum(ReportData.n(k['closed_prev'])),
             value: fmtNum(ReportData.n(k['closed'])),
             change: changeOf(ReportData.nn(k['closed']), ReportData.nn(k['closed_prev'])),
             spark: weekly,
             onTap: () => openDrill(context, 'closed', f),
           ),
           KpiCard(
-            label: tr('الالتزام بالمواعيد'),
+            label: tr('الالتزام بالمواعيد'), info: kpiInfo('on_time'), prev: fmtPct(ReportData.nn(k['on_time_prev'])),
             value: fmtPct(ReportData.nn(k['on_time'])),
             change: changeOf(ReportData.nn(k['on_time']), ReportData.nn(k['on_time_prev']), points: true),
             onTap: () => openDrill(context, 'overdue', f),
           ),
           KpiCard(
-            label: tr('متوسط زمن الإنجاز'),
+            label: tr('متوسط زمن الإنجاز'), info: kpiInfo('avg_days'), prev: fmtDays(ReportData.nn(k['avg_days_prev'])),
             value: fmtDays(ReportData.nn(k['avg_days'])),
             change: changeOf(ReportData.nn(k['avg_days']), ReportData.nn(k['avg_days_prev']), lowerIsBetter: true),
             onTap: () => openDrill(context, 'closed', f),
           ),
           if (fin != null)
             KpiCard(
-              label: tr('المحصّل'),
+              label: tr('المحصّل'), info: kpiInfo('collected'), prev: moneyLabel(ReportData.n(fin['collected_prev'])),
               value: moneyCompact(ReportData.n(fin['collected'])),
               change: changeOf(ReportData.nn(fin['collected']), ReportData.nn(fin['collected_prev'])),
               color: ChartColors.blue,
@@ -351,7 +353,7 @@ class _Dashboard extends StatelessWidget {
             )
           else
             KpiCard(
-              label: tr('طلبات جديدة'),
+              label: tr('طلبات جديدة'), info: kpiInfo('new'), prev: fmtNum(ReportData.n(k['new_prev'])),
               value: fmtNum(ReportData.n(k['new'])),
               change: changeOf(ReportData.nn(k['new']), ReportData.nn(k['new_prev'])),
               onTap: () => openDrill(context, 'new', f),
@@ -364,29 +366,30 @@ class _Dashboard extends StatelessWidget {
         const SizedBox(height: 14),
         ResponsiveGrid(height: 96, children: [
           KpiCard(
-            label: tr('مفتوحة الآن'),
+            label: tr('مفتوحة الآن'), info: kpiInfo('open'),
             value: fmtNum(ReportData.n(k['open'])),
             onTap: () => openDrill(context, 'open', f),
           ),
           KpiCard(
-            label: tr('طلبات جديدة'),
+            label: tr('طلبات جديدة'), info: kpiInfo('new'), prev: fmtNum(ReportData.n(k['new_prev'])),
             value: fmtNum(ReportData.n(k['new'])),
             change: changeOf(ReportData.nn(k['new']), ReportData.nn(k['new_prev'])),
             onTap: () => openDrill(context, 'new', f),
           ),
           KpiCard(
-            label: tr('مهام منجزة'),
+            label: tr('مهام منجزة'), info: kpiInfo('tasks_done'), prev: fmtNum(ReportData.n(k['tasks_done_prev'])),
             value: fmtNum(ReportData.n(k['tasks_done'])),
             change: changeOf(ReportData.nn(k['tasks_done']), ReportData.nn(k['tasks_done_prev'])),
             onTap: f.member == null ? null : () => openDrill(context, 'member_tasks', f),
           ),
           KpiCard(
-            label: tr('اجتماعات منعقدة'),
+            label: tr('اجتماعات منعقدة'), info: kpiInfo('meetings_held'), prev: fmtNum(ReportData.n(k['meetings_held_prev'])),
             value: fmtNum(ReportData.n(k['meetings_held'])),
             change: changeOf(ReportData.nn(k['meetings_held']), ReportData.nn(k['meetings_held_prev'])),
             onTap: () => context.go('/meetings'),
           ),
         ]),
+        const PinnedReports(),
       ],
     );
   }
@@ -415,6 +418,15 @@ class _WeeklyCard extends StatelessWidget {
                   target: perWeek,
                   height: 150,
                   gridColor: AppColors.line,
+                  tooltipBuilder: (i) {
+                    final w = DateTime.tryParse('${d.weekly[i]['week']}');
+                    final range = w == null ? '' : tr('{0} – {1}', [formatShortDate(w), formatShortDate(w.add(const Duration(days: 6)))]);
+                    return [
+                      range,
+                      tr('منجز: {0}', [values[i]]),
+                      if (perWeek != null) tr('الهدف: {0}', [perWeek.toStringAsFixed(1)]),
+                    ].join('\n');
+                  },
                   semanticLabel: tr('الطلبات المنجزة أسبوعيًا: {0}', [values.join(tr('، '))]),
                 ),
                 const SizedBox(height: 6),
@@ -454,7 +466,11 @@ class _StatusCard extends ConsumerWidget {
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                StackedBar(parts: [for (final e in entries) (ReportData.n(e.value), statusColor(e.key, labels))], height: 18),
+                StackedBar(
+                  parts: [for (final e in entries) (ReportData.n(e.value), statusColor(e.key, labels))],
+                  tips: [for (final e in entries) shareTip(statusName(e.key, labels), ReportData.n(e.value), total)],
+                  height: 18,
+                ),
                 const SizedBox(height: 10),
                 for (final e in entries)
                   ReportRowTile(
@@ -486,6 +502,7 @@ class _OnTimeCard extends StatelessWidget {
           thickness: 18,
           trackColor: AppColors.divider,
           semanticLabel: tr('التسليم في الموعد {0}', [fmtPct(v)]),
+          tooltip: [kpiInfo('on_time'), tr('الفترة السابقة: {0}', [fmtPct(ReportData.nn(d.kpi['on_time_prev']))])].join('\n'),
           parts: [((v ?? 0), color), (100 - (v ?? 0), Colors.transparent)],
           center: Column(
             mainAxisSize: MainAxisSize.min,
@@ -501,28 +518,72 @@ class _OnTimeCard extends StatelessWidget {
 }
 
 // ---------------- الأرقام ----------------
-class _Numbers extends StatelessWidget {
+enum _Cmp { previous, lastYear, custom }
+
+class _Numbers extends ConsumerStatefulWidget {
   const _Numbers(this.d, this.f);
   final ReportData d;
   final ReportFilter f;
 
   @override
+  ConsumerState<_Numbers> createState() => _NumbersState();
+}
+
+class _NumbersState extends ConsumerState<_Numbers> {
+  _Cmp _cmp = _Cmp.previous;
+  DateTimeRange? _range;
+
+  static DateTime _yearBack(DateTime d) => DateTime(d.year - 1, d.month, d.day.clamp(1, DateTime(d.year - 1, d.month + 1, 0).day));
+
+  Future<void> _pick() async {
+    final now = DateTime.now();
+    final r = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 4),
+      lastDate: now,
+      initialDateRange: _range ?? DateTimeRange(start: _yearBack(widget.f.from), end: _yearBack(widget.f.to)),
+    );
+    if (r != null) {
+      setState(() {
+        _range = DateTimeRange(start: dateOnly(r.start), end: dateOnly(r.end));
+        _cmp = _Cmp.custom;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final d = widget.d, f = widget.f;
     final k = d.kpi;
     final fin = d.finance;
-    final rows = <(String, num?, num?, String Function(num?), bool, bool, String?)>[
-      (tr('طلبات منجزة'), ReportData.nn(k['closed']), ReportData.nn(k['closed_prev']), _n, false, false, 'closed'),
-      (tr('طلبات جديدة'), ReportData.nn(k['new']), ReportData.nn(k['new_prev']), _n, false, false, 'new'),
-      (tr('الالتزام بالمواعيد'), ReportData.nn(k['on_time']), ReportData.nn(k['on_time_prev']), fmtPct, false, true, null),
-      (tr('متوسط زمن الإنجاز'), ReportData.nn(k['avg_days']), ReportData.nn(k['avg_days_prev']), fmtDays, true, false, null),
-      (tr('مهام منجزة'), ReportData.nn(k['tasks_done']), ReportData.nn(k['tasks_done_prev']), _n, false, false, null),
-      (tr('اجتماعات منعقدة'), ReportData.nn(k['meetings_held']), ReportData.nn(k['meetings_held_prev']), _n, false, false, null),
+    final (DateTime, DateTime)? cr = switch (_cmp) {
+      _Cmp.lastYear => (_yearBack(f.from), _yearBack(f.to)),
+      _Cmp.custom => _range == null ? null : (_range!.start, _range!.end),
+      _Cmp.previous => null,
+    };
+    final cmpAsync = cr == null ? null : ref.watch(reportDashboardProvider((cr.$1, cr.$2, f.member)));
+    final cmp = cmpAsync?.valueOrNull;
+    final cmpLabel = cr == null ? tr('السابقة') : tr('{0} – {1}', [formatShortDate(cr.$1), formatShortDate(cr.$2)]);
+
+    num? prevOf(Map<String, dynamic>? cur, Map<String, dynamic>? other, String key, {bool snapshot = false}) {
+      if (cr == null) return ReportData.nn(cur?['${key}_prev']);
+      if (snapshot) return null;
+      return ReportData.nn(other?[key]);
+    }
+
+    final rows = <(String, String, num?, num?, String Function(num?), bool, bool, String?)>[
+      (tr('طلبات منجزة'), 'closed', ReportData.nn(k['closed']), prevOf(k, cmp?.kpi, 'closed'), _n, false, false, 'closed'),
+      (tr('طلبات جديدة'), 'new', ReportData.nn(k['new']), prevOf(k, cmp?.kpi, 'new'), _n, false, false, 'new'),
+      (tr('الالتزام بالمواعيد'), 'on_time', ReportData.nn(k['on_time']), prevOf(k, cmp?.kpi, 'on_time'), fmtPct, false, true, null),
+      (tr('متوسط زمن الإنجاز'), 'avg_days', ReportData.nn(k['avg_days']), prevOf(k, cmp?.kpi, 'avg_days'), fmtDays, true, false, null),
+      (tr('مهام منجزة'), 'tasks_done', ReportData.nn(k['tasks_done']), prevOf(k, cmp?.kpi, 'tasks_done'), _n, false, false, null),
+      (tr('اجتماعات منعقدة'), 'meetings_held', ReportData.nn(k['meetings_held']), prevOf(k, cmp?.kpi, 'meetings_held'), _n, false, false, null),
       if (f.member == null)
-        (tr('عملاء جدد'), ReportData.nn(k['new_clients']), ReportData.nn(k['new_clients_prev']), _n, false, false, null),
+        (tr('عملاء جدد'), 'new_clients', ReportData.nn(k['new_clients']), prevOf(k, cmp?.kpi, 'new_clients'), _n, false, false, null),
       if (fin != null) ...[
-        (tr('المحصّل'), ReportData.nn(fin['collected']), ReportData.nn(fin['collected_prev']), _m, false, false, null),
-        (tr('المفوتر'), ReportData.nn(fin['billed']), null, _m, false, false, null),
-        (tr('المستحق على العملاء'), ReportData.nn(fin['due']), null, _m, false, false, 'late_invoices'),
+        (tr('المحصّل'), 'collected', ReportData.nn(fin['collected']), prevOf(fin, cmp?.finance, 'collected'), _m, false, false, null),
+        (tr('المفوتر'), 'billed', ReportData.nn(fin['billed']), cr == null ? null : ReportData.nn(cmp?.finance?['billed']), _m, false, false, null),
+        (tr('المستحق على العملاء'), 'due', ReportData.nn(fin['due']), null, _m, false, false, 'late_invoices'),
       ],
     ];
     final a = d.alerts;
@@ -536,38 +597,74 @@ class _Numbers extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ReportCard(
-          title: tr('مقارنة بالفترة السابقة'),
+          title: tr('المقارنة'),
+          subtitle: tr('{0} مقابل {1}', [f.label, cmpLabel]),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  ChoiceChip(
+                    label: Text(tr('الفترة السابقة')),
+                    selected: _cmp == _Cmp.previous,
+                    showCheckmark: false,
+                    onSelected: (_) => setState(() => _cmp = _Cmp.previous),
+                  ),
+                  ChoiceChip(
+                    label: Text(tr('نفس الفترة العام الماضي')),
+                    selected: _cmp == _Cmp.lastYear,
+                    showCheckmark: false,
+                    onSelected: (_) => setState(() => _cmp = _Cmp.lastYear),
+                  ),
+                  ChoiceChip(
+                    avatar: const Icon(Icons.date_range, size: 16),
+                    label: Text(tr('فترة أخرى')),
+                    selected: _cmp == _Cmp.custom,
+                    showCheckmark: false,
+                    onSelected: (_) => _pick(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (cmpAsync != null && cmpAsync.isLoading && cmp == null) const LinearProgressIndicator(minHeight: 2),
               Row(
                 children: [
                   Expanded(flex: 5, child: Text(tr('المؤشر'), style: _head)),
                   Expanded(flex: 3, child: Text(tr('الحالية'), style: _head, textAlign: TextAlign.end)),
-                  Expanded(flex: 3, child: Text(tr('السابقة'), style: _head, textAlign: TextAlign.end)),
+                  Expanded(flex: 3, child: Text(cr == null ? tr('السابقة') : tr('المقارنة'), style: _head, textAlign: TextAlign.end)),
                   Expanded(flex: 3, child: Text(tr('التغير'), style: _head, textAlign: TextAlign.end)),
                 ],
               ),
               const Divider(height: 18),
               for (final r in rows)
-                InkWell(
-                  onTap: r.$7 == null ? null : () => openDrill(context, r.$7!, f),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    child: Row(
-                      children: [
-                        Expanded(flex: 5, child: Text(r.$1, style: const TextStyle(fontSize: 14))),
-                        Expanded(
-                          flex: 3,
-                          child: Text(r.$4(r.$2),
-                              textAlign: TextAlign.end, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                        ),
-                        Expanded(
-                          flex: 3,
-                          child: Text(r.$3 == null ? '—' : r.$4(r.$3),
-                              textAlign: TextAlign.end, style: TextStyle(fontSize: 14, color: AppColors.muted)),
-                        ),
-                        Expanded(flex: 3, child: _ChangeText(changeOf(r.$2, r.$3, lowerIsBetter: r.$5, points: r.$6))),
-                      ],
+                ChartTip(
+                  message: [
+                    kpiInfo(r.$2),
+                    tr('الحالية: {0}', [r.$5(r.$3)]),
+                    tr('المقارنة: {0}', [r.$4 == null ? '—' : r.$5(r.$4)]),
+                  ].join('\n'),
+                  child: InkWell(
+                    onTap: r.$8 == null ? null : () => openDrill(context, r.$8!, f),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      child: Row(
+                        children: [
+                          Expanded(flex: 5, child: Text(r.$1, style: const TextStyle(fontSize: 14))),
+                          Expanded(
+                            flex: 3,
+                            child: Text(r.$5(r.$3),
+                                textAlign: TextAlign.end, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                          ),
+                          Expanded(
+                            flex: 3,
+                            child: Text(r.$4 == null ? '—' : r.$5(r.$4),
+                                textAlign: TextAlign.end, style: TextStyle(fontSize: 14, color: AppColors.muted)),
+                          ),
+                          Expanded(flex: 3, child: _ChangeText(changeOf(r.$3, r.$4, lowerIsBetter: r.$6, points: r.$7))),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -579,7 +676,7 @@ class _Numbers extends StatelessWidget {
           height: 92,
           children: [
             for (final (label, n, kind) in now)
-              KpiCard(label: label, value: fmtNum(n), onTap: () => openDrill(context, kind, f)),
+              KpiCard(label: label, value: fmtNum(n), info: kpiInfo(kind), onTap: () => openDrill(context, kind, f)),
           ],
         ),
       ],
@@ -692,7 +789,14 @@ class _ServicesCard extends StatelessWidget {
           : Column(
               children: [
                 for (final e in s)
-                  Padding(
+                  ChartTip(
+                    message: [
+                      serviceName('${e['name']}'),
+                      tr('طلبات جديدة في الفترة: {0}', [fmtNum(ReportData.n(e['count']))]),
+                      if (ReportData.n(e['value']) > 0) tr('القيمة التقديرية: {0}', [moneyLabel(ReportData.n(e['value']))]),
+                      tr('متوسط الإنجاز (آخر ٦ أشهر): {0}', [fmtDays(ReportData.nn(e['avg_days']))]),
+                    ].join('\n'),
+                    child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 7),
                     child: Row(
                       children: [
@@ -722,6 +826,7 @@ class _ServicesCard extends StatelessWidget {
                       ],
                     ),
                   ),
+                  ),
               ],
             ),
     );
@@ -743,21 +848,21 @@ class _RequestsTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ResponsiveGrid(height: 100, children: [
-          KpiCard(label: tr('مفتوحة الآن'), value: fmtNum(ReportData.n(k['open'])), onTap: () => openDrill(context, 'open', f)),
+          KpiCard(label: tr('مفتوحة الآن'), info: kpiInfo('open'), value: fmtNum(ReportData.n(k['open'])), onTap: () => openDrill(context, 'open', f)),
           KpiCard(
-            label: tr('طلبات جديدة'),
+            label: tr('طلبات جديدة'), info: kpiInfo('new'), prev: fmtNum(ReportData.n(k['new_prev'])),
             value: fmtNum(ReportData.n(k['new'])),
             change: changeOf(ReportData.nn(k['new']), ReportData.nn(k['new_prev'])),
             onTap: () => openDrill(context, 'new', f),
           ),
           KpiCard(
-            label: tr('طلبات منجزة'),
+            label: tr('طلبات منجزة'), info: kpiInfo('closed'), prev: fmtNum(ReportData.n(k['closed_prev'])),
             value: fmtNum(ReportData.n(k['closed'])),
             change: changeOf(ReportData.nn(k['closed']), ReportData.nn(k['closed_prev'])),
             onTap: () => openDrill(context, 'closed', f),
           ),
           KpiCard(
-            label: tr('متأخرة'),
+            label: tr('متأخرة'), info: kpiInfo('overdue'),
             value: fmtNum(ReportData.n(d.alerts['overdue'])),
             color: ChartColors.coral,
             onTap: () => openDrill(context, 'overdue', f),
@@ -793,6 +898,8 @@ class _TeamTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const WorkloadCard(),
+        const SizedBox(height: 14),
         ReportCard(
           title: tr('توزيع العمل الحالي'),
           subtitle: tr('المهام والطلبات المفتوحة لكل عضو'),
@@ -828,6 +935,11 @@ class _TeamTab extends StatelessWidget {
                                         height: 14,
                                         trackColor: AppColors.divider,
                                         parts: [(open - late, ChartColors.green), (late, ChartColors.coral), (req, ChartColors.blue)],
+                                        tips: [
+                                          tr('{0} مهام مفتوحة في موعدها', [fmtNum(open - late)]),
+                                          tr('{0} مهام متأخرة', [fmtNum(late)]),
+                                          tr('{0} طلبات مفتوحة', [fmtNum(req)]),
+                                        ],
                                       ),
                                     ),
                                   );
@@ -952,15 +1064,15 @@ class _FinanceTab extends StatelessWidget {
       children: [
         ResponsiveGrid(height: 104, wide: 3, children: [
           KpiCard(
-            label: tr('المحصّل في الفترة'),
+            label: tr('المحصّل في الفترة'), info: kpiInfo('collected'), prev: moneyLabel(ReportData.n(fin['collected_prev'])),
             value: moneyCompact(ReportData.n(fin['collected'])),
             change: changeOf(ReportData.nn(fin['collected']), ReportData.nn(fin['collected_prev'])),
             color: ChartColors.blue,
             spark: [for (final m in monthly) ReportData.n(m['collected'])],
           ),
-          KpiCard(label: tr('المفوتر في الفترة'), value: moneyCompact(ReportData.n(fin['billed'])), note: tr('ر.س')),
+          KpiCard(label: tr('المفوتر في الفترة'), info: kpiInfo('billed'), value: moneyCompact(ReportData.n(fin['billed'])), note: tr('ر.س')),
           KpiCard(
-            label: tr('المستحق على العملاء'),
+            label: tr('المستحق على العملاء'), info: kpiInfo('due'),
             value: moneyCompact(ReportData.n(fin['due'])),
             note: tr('ر.س'),
             color: ChartColors.coral,
@@ -981,8 +1093,19 @@ class _FinanceTab extends StatelessWidget {
                   colorA: ChartColors.blue,
                   colorB: ChartColors.slate.withValues(alpha: 0.55),
                   labelStyle: TextStyle(fontSize: 11, color: AppColors.muted),
+                  tooltipBuilder: (i) {
+                    final b = ReportData.n(monthly[i]['billed']), c = ReportData.n(monthly[i]['collected']);
+                    return [
+                      formatPattern('MMMM y', DateTime.tryParse('${monthly[i]['month']}') ?? DateTime.now()),
+                      tr('مفوتر: {0}', [moneyLabel(b)]),
+                      tr('محصّل: {0}', [moneyLabel(c)]),
+                      if (b > 0) tr('نسبة التحصيل: {0}', [fmtPct(c * 100 / b)]),
+                    ].join('\n');
+                  },
                 ),
         ),
+        const SizedBox(height: 14),
+        FunnelCard(filter: f),
         const SizedBox(height: 14),
         TwoUp(
           ReportCard(
@@ -994,6 +1117,10 @@ class _FinanceTab extends StatelessWidget {
                   thickness: 16,
                   trackColor: AppColors.divider,
                   parts: [for (final p in agingParts) (p.$2, p.$3)],
+                  tooltip: [
+                    for (final p in agingParts)
+                      shareTip(p.$1, p.$2, agingParts.fold<num>(0, (a, q) => a + q.$2), fmt: moneyLabel),
+                  ].join('\n'),
                   center: Text(moneyCompact(agingParts.fold<num>(0, (a, p) => a + p.$2)),
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 ),
@@ -1094,14 +1221,16 @@ class _ClientsTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ResponsiveGrid(height: 100, wide: 3, children: [
-          KpiCard(label: tr('عملاء نشطون'), value: fmtNum(ReportData.n(c['active'])), note: tr('تعامل خلال ٦٠ يومًا'), onTap: () => context.go('/more/clients')),
+          KpiCard(label: tr('عملاء نشطون'), info: kpiInfo('active_clients'), value: fmtNum(ReportData.n(c['active'])), note: tr('تعامل خلال ٦٠ يومًا'), onTap: () => context.go('/more/clients')),
           KpiCard(
-            label: tr('عملاء جدد'),
+            label: tr('عملاء جدد'), info: kpiInfo('new_clients'), prev: fmtNum(ReportData.n(k['new_clients_prev'])),
             value: fmtNum(ReportData.n(k['new_clients'])),
             change: changeOf(ReportData.nn(k['new_clients']), ReportData.nn(k['new_clients_prev'])),
           ),
-          KpiCard(label: tr('بلا تواصل +٦٠ يومًا'), value: fmtNum(idle.length), color: ChartColors.amber),
+          KpiCard(label: tr('بلا تواصل +٦٠ يومًا'), info: kpiInfo('idle_clients'), value: fmtNum(idle.length), color: ChartColors.amber),
         ]),
+        const SizedBox(height: 14),
+        const ClientTiersCard(),
         const SizedBox(height: 14),
         TwoUp(
           ReportCard(
@@ -1174,7 +1303,12 @@ class _MeetingsBlock extends StatelessWidget {
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    StackedBar(parts: [for (final p in parts) (p.$2, p.$3)], height: 18, trackColor: AppColors.divider),
+                    StackedBar(
+                      parts: [for (final p in parts) (p.$2, p.$3)],
+                      tips: [for (final p in parts) shareTip(p.$1, p.$2, total)],
+                      height: 18,
+                      trackColor: AppColors.divider,
+                    ),
                     const SizedBox(height: 10),
                     Legend([for (final p in parts) ('${p.$1} ${fmtNum(p.$2)}', p.$3)]),
                   ],

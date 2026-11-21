@@ -616,6 +616,51 @@ class SectionRepository {
         onConflict: 'month,metric',
       );
 
+  // ---------------- التقارير المخصصة والمتقدمة ----------------
+  Future<CustomResult> reportCustom(Map<String, dynamic> query) async {
+    final res = await _db.rpc('report_custom', params: {'p': query});
+    return CustomResult(Map<String, dynamic>.from(res as Map));
+  }
+
+  Future<List<SavedReport>> savedReports() async {
+    final rows = await _db.from('saved_reports').select().order('created_at');
+    return rows.map((r) => SavedReport.fromMap(r)).toList();
+  }
+
+  Future<void> saveReport({
+    String? id,
+    required String name,
+    required CustomConfig config,
+    bool shared = false,
+    bool pinned = false,
+    bool onTv = false,
+  }) async {
+    final data = {
+      'name': name,
+      'config': config.toJson(),
+      'shared': shared,
+      'pinned': pinned,
+      'on_tv': onTv,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    if (id == null) {
+      await _db.from('saved_reports').insert({...data, 'owner_id': _uid});
+    } else {
+      await _db.from('saved_reports').update(data).eq('id', id);
+    }
+  }
+
+  Future<void> deleteReport(String id) => _db.from('saved_reports').delete().eq('id', id);
+
+  Future<Map<String, dynamic>> reportWorkload(int days) async =>
+      Map<String, dynamic>.from(await _db.rpc('report_workload', params: {'p_days': days}) as Map);
+
+  Future<Map<String, dynamic>> reportFunnel(DateTime from, DateTime to) async => Map<String, dynamic>.from(
+      await _db.rpc('report_funnel', params: {'p_from': _isoDate(from), 'p_to': _isoDate(to)}) as Map);
+
+  Future<Map<String, dynamic>> clientTiers() async =>
+      Map<String, dynamic>.from(await _db.rpc('report_client_tiers') as Map);
+
   Future<void> deleteGoal(DateTime month, String metric) => _db
       .from('report_goals')
       .delete()
@@ -673,6 +718,17 @@ final manageRowsProvider = FutureProvider.family<List<Map<String, dynamic>>, Str
 );
 final trashProvider = FutureProvider<List<TrashItem>>((ref) => ref.watch(sectionRepoProvider).trash());
 
+/// تقرير مخصص — المفتاح هو CustomConfig.key
+final customReportProvider = FutureProvider.autoDispose.family<CustomResult, String>(
+  (ref, key) => ref.watch(sectionRepoProvider).reportCustom(Map<String, dynamic>.from(jsonDecode(key) as Map)),
+);
+final savedReportsProvider = FutureProvider<List<SavedReport>>((ref) => ref.watch(sectionRepoProvider).savedReports());
+final workloadProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) => ref.watch(sectionRepoProvider).reportWorkload(14));
+final funnelProvider = FutureProvider.autoDispose.family<Map<String, dynamic>, (DateTime, DateTime)>(
+  (ref, k) => ref.watch(sectionRepoProvider).reportFunnel(k.$1, k.$2),
+);
+final clientTiersProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) => ref.watch(sectionRepoProvider).clientTiers());
+
 /// (من، إلى، عضو)
 final reportDashboardProvider = FutureProvider.family<ReportData, (DateTime, DateTime, String?)>(
   (ref, k) => ref.watch(sectionRepoProvider).reportDashboard(k.$1, k.$2, member: k.$3),
@@ -710,6 +766,11 @@ void refreshSections(WidgetRef ref) {
   ref.invalidate(financeSummaryProvider);
   ref.invalidate(quotesProvider);
   ref.invalidate(reportDashboardProvider);
+  ref.invalidate(savedReportsProvider);
+  ref.invalidate(customReportProvider);
+  ref.invalidate(workloadProvider);
+  ref.invalidate(funnelProvider);
+  ref.invalidate(clientTiersProvider);
   ref.invalidate(daftraStateProvider);
   ref.invalidate(notesProvider);
   ref.invalidate(teamMembersProvider);

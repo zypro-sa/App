@@ -47,6 +47,31 @@ String fmtDays(num? v) => v == null ? '—' : tr('{0} يوم', [v]);
   return (tr('{0} {1}٪', [p > 0 ? '▲' : '▼', p.abs()]), lowerIsBetter ? p < 0 : p > 0);
 }
 
+/// شرح كل مؤشر (يظهر في التلميح)
+String kpiInfo(String key) => switch (key) {
+      'closed' => tr('عدد الطلبات التي أُغلقت خلال الفترة'),
+      'new' => tr('الطلبات التي أُنشئت خلال الفترة'),
+      'on_time' => tr('نسبة الطلبات المنجزة في موعدها أو قبله، من المنجزة التي لها موعد تسليم'),
+      'avg_days' => tr('متوسط الأيام من إنشاء الطلب حتى إغلاقه'),
+      'open' => tr('الطلبات غير المغلقة وغير الملغاة الآن'),
+      'overdue' => tr('طلبات مفتوحة تجاوزت موعد تسليمها'),
+      'waiting_long' => tr('طلبات بحالة «بانتظار العميل» لم تتحدث منذ أكثر من ٧ أيام'),
+      'quotes_no_reply' => tr('عروض مُرسلة منذ ٣ أيام أو أكثر بلا قبول أو رفض'),
+      'tasks_done' => tr('المهام التي أُنجزت خلال الفترة'),
+      'meetings_held' => tr('الاجتماعات التي عُقدت خلال الفترة'),
+      'collected' => tr('مجموع الدفعات المستلمة خلال الفترة'),
+      'billed' => tr('صافي الفواتير الصادرة خلال الفترة بعد المرتجعات'),
+      'due' => tr('المتبقي على كل الفواتير غير الملغاة بعد الدفعات والمرتجعات'),
+      'new_clients' => tr('العملاء المضافون خلال الفترة'),
+      'active_clients' => tr('عملاء لهم طلب أو اجتماع خلال آخر ٦٠ يومًا'),
+      'idle_clients' => tr('عملاء بلا طلبات ولا اجتماعات منذ أكثر من ٦٠ يومًا'),
+      _ => '',
+    };
+
+/// «الاسم: العدد (النسبة)» للتلميحات
+String shareTip(String label, num v, num total, {String Function(num)? fmt}) =>
+    tr('{0}: {1} ({2})', [label, (fmt ?? fmtNum)(v), total == 0 ? '—' : fmtPct(v * 100 / total)]);
+
 // ---------------- حالات الطلبات ----------------
 Map<String, StatusLabel> requestLabels(WidgetRef ref) => {
       for (final l in ref.watch(statusLabelsProvider(ConfigEntity.request)).valueOrNull ?? const <StatusLabel>[])
@@ -196,7 +221,11 @@ class KpiCard extends StatelessWidget {
     this.note,
     this.onTap,
     this.color = ChartColors.green,
+    this.info,
+    this.prev,
   });
+  final String? info;
+  final String? prev;
   final String label;
   final String value;
   final (String, bool)? change;
@@ -207,7 +236,13 @@ class KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CardBox(
+    final tip = [
+      if (info != null) info!,
+      if (prev != null) tr('الفترة السابقة: {0}', [prev]),
+      if (change != null) tr('التغير: {0}', [change!.$1]),
+      if (onTap != null) tr('اضغط لعرض القائمة'),
+    ].join('\n');
+    return ChartTip(message: info == null && prev == null ? null : tip, child: CardBox(
       radius: 16,
       padding: const EdgeInsets.all(14),
       onTap: onTap,
@@ -249,7 +284,7 @@ class KpiCard extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ));
   }
 }
 

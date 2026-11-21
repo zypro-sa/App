@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/formatters.dart';
 import '../../core/i18n.dart';
@@ -12,6 +13,7 @@ import '../../data/report_models.dart';
 import '../../data/repository.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/charts.dart';
+import 'custom_report.dart';
 import 'report_common.dart';
 
 /// ألوان شاشة المكتب (داكنة دائمًا)
@@ -37,6 +39,9 @@ class TvScreen extends ConsumerStatefulWidget {
 
 class _TvScreenState extends ConsumerState<TvScreen> {
   int _slides = 1;
+  int _interval = 30;
+  Set<String> _hidden = {};
+  List<(String, String)> _allSlides = const [];
   int _slide = 0;
   bool _paused = false;
   bool _full = false;
@@ -60,12 +65,97 @@ class _TvScreenState extends ConsumerState<TvScreen> {
     return (today.subtract(const Duration(days: 29)), today, null);
   }
 
+  void _startRotation() {
+    _rotate?.cancel();
+    _rotate = Timer.periodic(Duration(seconds: _interval), (_) {
+      if (!_paused) _next();
+    });
+  }
+
+  Future<void> _loadPrefs() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _hidden = (p.getStringList('tv_hidden_slides') ?? const []).toSet();
+        _interval = p.getInt('tv_interval') ?? 30;
+      });
+      _startRotation();
+    } catch (_) {}
+  }
+
+  Future<void> _savePrefs() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setStringList('tv_hidden_slides', _hidden.toList());
+      await p.setInt('tv_interval', _interval);
+    } catch (_) {}
+  }
+
+  /// وضع الاجتماع: اختيار الشرائح ومدة كل شريحة
+  Future<void> _configure() async {
+    final hidden = {..._hidden};
+    var interval = _interval;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: Text(tr('شرائح العرض')),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final (id, title) in _allSlides)
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: !hidden.contains(id),
+                      title: Text(title),
+                      onChanged: (v) => set(() => v == true ? hidden.remove(id) : hidden.add(id)),
+                    ),
+                  const SizedBox(height: 12),
+                  Text(tr('مدة كل شريحة')),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      for (final sec in const [15, 30, 60, 120])
+                        ChoiceChip(
+                          label: Text(sec < 60 ? tr('{0} ثانية', [sec]) : tr('{0} دقيقة', [sec ~/ 60])),
+                          selected: interval == sec,
+                          showCheckmark: false,
+                          onSelected: (_) => set(() => interval = sec),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('إلغاء'))),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(tr('تطبيق'))),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() {
+      _hidden = hidden;
+      _interval = interval;
+      _slide = 0;
+    });
+    _startRotation();
+    _savePrefs();
+  }
+
   @override
   void initState() {
     super.initState();
-    _rotate = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (!_paused) _next();
-    });
+    _startRotation();
+    _loadPrefs();
     _clock = Timer.periodic(const Duration(seconds: 20), (_) => setState(() => _now = DateTime.now()));
     _refresh = Timer.periodic(const Duration(minutes: 5), (_) {
       final k = _makeKey();
@@ -77,6 +167,8 @@ class _TvScreenState extends ConsumerState<TvScreen> {
       } else {
         ref.invalidate(reportDashboardProvider(_key));
         ref.invalidate(reportDashboardProvider(_monthKey));
+        ref.invalidate(savedReportsProvider);
+        ref.invalidate(customReportProvider);
       }
     });
   }
@@ -108,15 +200,22 @@ class _TvScreenState extends ConsumerState<TvScreen> {
     final month = allowed ? ref.watch(reportDashboardProvider(_monthKey)).valueOrNull : null;
 
     // الشرائح المتاحة حسب البيانات والصلاحيات
-    final slides = <(String, Widget Function(ReportData, double))>[
-      (tr('نظرة عامة · آخر ٣٠ يومًا'), (d, s) => _OverviewSlide(d, s)),
-      (tr('الطلبات · الحالات والتعطل'), (d, s) => _RequestsSlide(d, s)),
-      (tr('الفريق · العمل المفتوح والالتزام'), (d, s) => _TeamSlide(d, s)),
-      if (d?.finance != null) (tr('المالية · التحصيل والمستحقات'), (d, s) => _FinanceSlide(d, s)),
-      (tr('العملاء والاجتماعات'), (d, s) => _ClientsSlide(d, s)),
+    final tvReports = allowed
+        ? (ref.watch(savedReportsProvider).valueOrNull ?? const <SavedReport>[]).where((r) => r.onTv).toList()
+        : const <SavedReport>[];
+    final all = <(String, String, Widget Function(ReportData, double))>[
+      ('overview', tr('نظرة عامة · آخر ٣٠ يومًا'), (d, s) => _OverviewSlide(d, s)),
+      ('requests', tr('الطلبات · الحالات والتعطل'), (d, s) => _RequestsSlide(d, s)),
+      ('team', tr('الفريق · العمل المفتوح والالتزام'), (d, s) => _TeamSlide(d, s)),
+      if (d?.finance != null) ('finance', tr('المالية · التحصيل والمستحقات'), (d, s) => _FinanceSlide(d, s)),
+      ('clients', tr('العملاء والاجتماعات'), (d, s) => _ClientsSlide(d, s)),
       if (month != null && month.goals.isNotEmpty)
-        (tr('أهداف {0}', [formatPattern('MMMM', DateTime.now())]), (_, s) => _GoalsSlide(month, s)),
+        ('goals', tr('أهداف {0}', [formatPattern('MMMM', DateTime.now())]), (_, s) => _GoalsSlide(month, s)),
+      for (final r in tvReports) ('r:${r.id}', r.name, (_, s) => _CustomSlide(r, s)),
     ];
+    _allSlides = [for (final x in all) (x.$1, x.$2)];
+    final visible = all.where((x) => !_hidden.contains(x.$1)).toList();
+    final slides = [for (final x in (visible.isEmpty ? all : visible)) (x.$2, x.$3)];
     _slides = slides.length;
     if (_slide >= _slides) _slide = 0;
 
@@ -188,7 +287,8 @@ class _TvScreenState extends ConsumerState<TvScreen> {
         SizedBox(width: 8 * s),
         Text(formatDay(_now), style: TextStyle(fontSize: 15 * s, color: _Tv.muted)),
         SizedBox(width: 12 * s),
-        _iconBtn(_paused ? Icons.play_arrow : Icons.pause, _paused ? tr('تشغيل التبديل') : tr('إيقاف التبديل'), s,
+        _iconBtn(Icons.tune, tr('شرائح العرض'), s, _configure),
+        _iconBtn(_paused ? Icons.play_arrow : Icons.pause, _paused ? tr('تشغيل التبديل') : tr('تثبيت الشريحة الحالية'), s,
             () => setState(() => _paused = !_paused)),
         _iconBtn(_full ? Icons.fullscreen_exit : Icons.fullscreen, tr('ملء الشاشة'), s, () {
           setState(() => _full = !_full);
@@ -346,6 +446,13 @@ class _OverviewSlide extends StatelessWidget {
                       color: _Tv.accent,
                       gridColor: _Tv.line,
                       strokeWidth: 4 * s,
+                      tooltipBuilder: (i) {
+                        final w = DateTime.tryParse('${d.weekly[i]['week']}');
+                        return [
+                          if (w != null) formatShortDate(w),
+                          tr('منجز: {0}', [weekly[i]]),
+                        ].join('\n');
+                      },
                     ),
                   ),
                 ),
@@ -785,6 +892,9 @@ class _FinanceSlide extends StatelessWidget {
                             colorA: _Tv.blue,
                             colorB: _Tv.line,
                             labelStyle: TextStyle(fontSize: 13 * s, color: _Tv.muted),
+                            tooltipBuilder: (i) => tr('مفوتر: {0}', [moneyLabel(ReportData.n(monthly[i]['billed']))]) +
+                                '\n' +
+                                tr('محصّل: {0}', [moneyLabel(ReportData.n(monthly[i]['collected']))]),
                           ),
                         ),
                 ),
@@ -1037,6 +1147,37 @@ class _GoalsSlide extends StatelessWidget {
               );
             }(),
         ],
+      ),
+    );
+  }
+}
+
+// ---------------- تقرير مخصص ----------------
+class _CustomSlide extends ConsumerWidget {
+  const _CustomSlide(this.r, this.s);
+  final SavedReport r;
+  final double s;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final res = ref.watch(customReportProvider(r.config.key));
+    return _Box(
+      s: s,
+      title: customSummary(r.config),
+      child: res.when(
+        loading: () => const Center(child: CircularProgressIndicator(color: _Tv.accent)),
+        error: (_, __) => Center(child: Text(tr('تعذّر تحميل البيانات'), style: TextStyle(fontSize: 20 * s, color: _Tv.muted))),
+        data: (data) => LayoutBuilder(
+          builder: (context, c) => SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(),
+            child: CustomResultView(
+              config: r.config,
+              result: data,
+              dark: true,
+              height: (c.maxHeight * 0.8).clamp(150, 900).toDouble(),
+            ),
+          ),
+        ),
       ),
     );
   }
