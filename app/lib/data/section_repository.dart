@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -291,11 +292,74 @@ class SectionRepository {
   Future<void> setMemberPermissions(String id, Map<String, bool> overrides) =>
       _db.from('profiles').update({'permissions': overrides}).eq('id', id);
 
-  Future<void> setMemberActive(String id, bool active) =>
-      _db.from('profiles').update({'is_active': active}).eq('id', id);
+  /// الإيقاف عبر الخادم: يمنع تسجيل الدخول أيضًا
+  Future<void> setMemberActive(String id, bool active) => _admin({'action': 'set_active', 'user_id': id, 'active': active});
 
-  Future<void> updateMyProfile({required String name, String? jobTitle}) =>
-      _db.from('profiles').update({'name': name, 'job_title': jobTitle}).eq('id', _uid);
+  // ------------------------------------------------------------------
+  // إدارة المالك للأعضاء (دالة admin-users)
+  // ------------------------------------------------------------------
+  Future<void> _admin(Map<String, dynamic> body) async {
+    try {
+      final res = await _db.functions.invoke('admin-users', body: body);
+      final data = res.data;
+      if (data is Map && data['error'] != null) throw Exception(data['error']);
+    } on FunctionException catch (e) {
+      final d = e.details;
+      if (e.status == 404) throw Exception(tr('دالة admin-users غير منشورة بعد في Supabase'));
+      throw Exception(d is Map && d['error'] != null ? d['error'] : (d ?? e.reasonPhrase ?? e.status));
+    }
+  }
+
+  Future<void> adminUpdateMember(String id, {String? name, String? jobTitle, String? phone, String? email}) => _admin({
+        'action': 'update',
+        'user_id': id,
+        if (name != null) 'name': name,
+        if (jobTitle != null) 'job_title': jobTitle,
+        if (phone != null) 'phone': phone,
+        if (email != null) 'email': email,
+      });
+
+  Future<void> adminSetPassword(String id, String password) =>
+      _admin({'action': 'set_password', 'user_id': id, 'password': password});
+
+  Future<void> adminDeleteMember(String id, String transferTo) =>
+      _admin({'action': 'delete', 'user_id': id, 'transfer_to': transferTo});
+
+  // ------------------------------------------------------------------
+  // الحساب الشخصي
+  // ------------------------------------------------------------------
+  Future<void> updateMyProfile({String? name, String? phone}) => _db.from('profiles').update({
+        if (name != null) 'name': name.trim(),
+        if (phone != null) 'phone': phone.trim().isEmpty ? null : phone.trim(),
+      }).eq('id', _db.auth.currentUser!.id);
+
+  /// يُرسل رابط تأكيد للبريد الجديد؛ يتغير البريد بعد الضغط عليه
+  Future<void> changeMyEmail(String email) => _db.auth.updateUser(UserAttributes(email: email.trim()));
+
+  Future<void> changeMyPassword(String password) => _db.auth.updateUser(UserAttributes(password: password));
+
+  Future<void> uploadMyAvatar(List<int> bytes, String mime) async {
+    final uid = _db.auth.currentUser!.id;
+    final ext = mime.contains('png') ? 'png' : (mime.contains('webp') ? 'webp' : 'jpg');
+    final path = '$uid/avatar-${DateTime.now().millisecondsSinceEpoch}.$ext';
+    await _db.storage.from('avatars').uploadBinary(
+          path,
+          Uint8List.fromList(bytes),
+          fileOptions: FileOptions(contentType: mime, upsert: true),
+        );
+    final url = _db.storage.from('avatars').getPublicUrl(path);
+    await _db.from('profiles').update({'avatar_url': url}).eq('id', uid);
+  }
+
+  Future<void> removeMyAvatar() =>
+      _db.from('profiles').update({'avatar_url': null}).eq('id', _db.auth.currentUser!.id);
+
+  /// رابط استعادة كلمة المرور يعود للتطبيق نفسه
+  Future<void> sendPasswordReset(String email) => _db.auth.resetPasswordForEmail(
+        email.trim(),
+        redirectTo: Uri.base.replace(queryParameters: const {}, fragment: '').toString().split('#').first,
+      );
+
 
   // ---------------- لوحة التحكم ----------------
   Future<List<FieldSetting>> fieldSettings(ConfigEntity e) async {

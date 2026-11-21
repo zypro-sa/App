@@ -440,7 +440,9 @@ Deno.serve(async (req) => {
     const dry = body?.dry_run === true;
     const auto = body?.auto === true;
     // نفس قاعدة has_perm('finance.manage'): المالك دائمًا، وغيره حسب التخصيص (الافتراضي لا)
-    const canManage = me.role === "owner" || me.permissions?.["finance.manage"] === true;
+    const p = me.permissions ?? {};
+    const canManage = me.role === "owner" || p["finance.edit"] === true || p["finance.add"] === true ||
+      (p["finance.edit"] === undefined && p["finance.manage"] === true);
 
     const { data: state } = await db.from("daftra_sync").select("*").eq("id", 1).single();
     const now = Date.now();

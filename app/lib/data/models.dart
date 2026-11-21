@@ -100,7 +100,21 @@ String? _nested(dynamic v, String key) =>
     v is Map ? v[key]?.toString() : null;
 
 class Profile {
-  Profile({required this.id, required this.name, required this.role, this.jobTitle, this.permissions = const {}, this.locale});
+  Profile({
+    required this.id,
+    required this.name,
+    required this.role,
+    this.jobTitle,
+    this.permissions = const {},
+    this.locale,
+    this.email,
+    this.phone,
+    this.avatarUrl,
+  });
+
+  final String? email;
+  final String? phone;
+  final String? avatarUrl;
 
   final String id;
   final String name;
@@ -121,6 +135,9 @@ class Profile {
         jobTitle: m['job_title'] as String?,
         permissions: Map<String, dynamic>.from((m['permissions'] ?? const {}) as Map),
         locale: m['locale'] as String?,
+        email: m['email'] as String?,
+        phone: m['phone'] as String?,
+        avatarUrl: m['avatar_url'] as String?,
       );
 }
 

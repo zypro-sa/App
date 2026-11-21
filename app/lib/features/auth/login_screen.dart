@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme.dart';
 import '../../widgets/common.dart';
 import '../../core/i18n.dart';
+import '../../widgets/forms.dart';
 import '../../widgets/display_toggles.dart';
 
 /// تسجيل الدخول وإنشاء الحساب.
@@ -29,6 +30,32 @@ class _LoginScreenState extends State<LoginScreen> {
     _email.dispose();
     _password.dispose();
     super.dispose();
+  }
+
+  /// يُرسل رابطًا لتعيين كلمة مرور جديدة، يفتح التطبيق مباشرة على شاشة كلمة المرور
+  Future<void> _forgotPassword() async {
+    final email = await promptText(
+      context,
+      tr('استعادة كلمة المرور'),
+      initial: _email.text.trim(),
+      label: tr('البريد الإلكتروني المسجّل'),
+      confirmLabel: tr('إرسال الرابط'),
+    );
+    if (email == null || !mounted) return;
+    if (!email.contains('@')) {
+      showSnack(context, tr('أدخل بريدًا صحيحًا'));
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final here = Uri.base.toString().split('#').first.split('?').first;
+      await Supabase.instance.client.auth.resetPasswordForEmail(email.trim(), redirectTo: here);
+      if (mounted) showSnack(context, tr('إن كان البريد مسجّلًا فسيصلك رابط لتعيين كلمة مرور جديدة'));
+    } catch (e) {
+      if (mounted) showSnack(context, tr('حدث خطأ: {0}', [e]));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _submit() async {
@@ -122,7 +149,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     onFieldSubmitted: (_) => _submit(),
                     validator: (v) => (v == null || v.length < 8) ? tr('٨ أحرف على الأقل') : null,
                   ),
-                  const SizedBox(height: 24),
+                  if (!_signUp)
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: TextButton(
+                        onPressed: _busy ? null : _forgotPassword,
+                        child: Text(tr('نسيت كلمة المرور؟')),
+                      ),
+                    ),
+                  const SizedBox(height: 12),
                   FilledButton(
                     onPressed: _busy ? null : _submit,
                     child: _busy

@@ -342,10 +342,14 @@ class TeamMember {
     this.jobTitle,
     this.permissions = const {},
     this.locale = 'ar',
+    this.phone,
+    this.avatarUrl,
   });
 
   final Map<String, dynamic> permissions;
   final String locale;
+  final String? phone;
+  final String? avatarUrl;
   bool can(String key) => Permissions.effective(role, permissions, key);
   bool isCustomized(String key) =>
       role != UserRole.owner && permissions[key] is bool && permissions[key] != Permissions.roleDefault(role, key);
@@ -374,6 +378,8 @@ class TeamMember {
         jobTitle: m['job_title'] as String?,
         permissions: Map<String, dynamic>.from((m['permissions'] ?? const {}) as Map),
         locale: m['locale'] == 'en' ? 'en' : 'ar',
+        phone: m['phone'] as String?,
+        avatarUrl: m['avatar_url'] as String?,
       );
 }
 

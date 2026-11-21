@@ -120,8 +120,8 @@ class _Header extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         GestureDetector(
-          onTap: () => context.go('/more'),
-          child: Avatar(profile?.initial ?? tr('؟'), size: 44, fg: AppColors.accent, bg: AppColors.hero, radius: 14),
+          onTap: () => context.go('/more/account'),
+          child: Avatar(profile?.initial ?? tr('؟'), size: 44, fg: AppColors.accent, bg: AppColors.hero, radius: 14, imageUrl: profile?.avatarUrl),
         ),
       ],
     );

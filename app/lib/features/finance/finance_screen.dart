@@ -38,6 +38,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final invoices = ref.watch(invoicesProvider);
     final quotes = ref.watch(quotesProvider);
     final linked = ref.watch(daftraStateProvider).valueOrNull?.enabled ?? false;
+    final canAdd = ref.watch(profileProvider).valueOrNull?.can(Permissions.financeAdd) ?? false;
     final now = DateTime.now();
 
     return Scaffold(
@@ -93,7 +94,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                     : _QuoteList(list),
               ),
             const SizedBox(height: 14),
-            if (!linked)
+            if (!linked && canAdd)
             Row(
               children: [
                 if (!_quotes) ...[
@@ -461,13 +462,13 @@ class InvoiceSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final inv = ref.watch(invoicesProvider).valueOrNull?.where((i) => i.id == invoiceId).firstOrNull;
     final clients = ref.watch(clientsProvider).valueOrNull ?? const <Client>[];
-    final canDelete = ref.watch(profileProvider).valueOrNull?.can(Permissions.dataDelete) ?? false;
+    final canDelete = ref.watch(profileProvider).valueOrNull?.can(Permissions.financeDelete) ?? false;
     final repo = ref.read(sectionRepoProvider);
     if (inv == null) {
       return const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()));
     }
     // فواتير دفترة: للعرض فقط، عدا ربطها بطلب ووصفها
-    final locked = inv.fromDaftra;
+    final locked = inv.fromDaftra || !(ref.watch(profileProvider).valueOrNull?.can(Permissions.financeEdit) ?? false);
 
     Future<void> save(Map<String, dynamic> changes, {String? success}) async {
       if (await runAction(context, () => repo.updateInvoice(inv.id, changes), success: success ?? tr('حُفظ التعديل'))) {
@@ -495,7 +496,7 @@ class InvoiceSheet extends ConsumerWidget {
                   : tr('المدفوع {0} · المتبقي {1}', [money(inv.paid), money(inv.remaining)]),
               style: TextStyle(fontSize: 13, color: inv.isOverdue ? AppColors.urgent : AppColors.muted, fontWeight: FontWeight.w600),
             ),
-            if (locked) ...[
+            if (inv.fromDaftra) ...[
               const SizedBox(height: 10),
               _daftraNote(tr('من دفترة · المبالغ والدفعات تُعدّل في دفترة')),
             ],
@@ -755,7 +756,7 @@ class QuoteSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final q = ref.watch(quotesProvider).valueOrNull?.where((x) => x.id == quote.id).firstOrNull ?? quote;
     final clients = ref.watch(clientsProvider).valueOrNull ?? const <Client>[];
-    final canDelete = ref.watch(profileProvider).valueOrNull?.can(Permissions.dataDelete) ?? false;
+    final canDelete = ref.watch(profileProvider).valueOrNull?.can(Permissions.financeDelete) ?? false;
     final repo = ref.read(sectionRepoProvider);
 
     Future<void> save(Map<String, dynamic> changes, {String? success}) async {
