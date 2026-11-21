@@ -186,7 +186,7 @@ Future<void> maybeOfferBio(BuildContext context) async {
     ),
   );
   if (ok != true || !context.mounted) return;
-  if (needLogin && password != null) {
+  if (needLogin) {
     final done = await enableBioLogin(context, password);
     if (done && needLock && context.mounted) await enableBioLock(context, quiet: true);
   } else {
