@@ -116,6 +116,42 @@
       try { if (zyproRec) zyproRec.stop(); } catch (e) {}
     };
 
+    // ---- التصدير والمشاركة والطباعة (التقارير) ----
+    window.zyproDownload = function (name, text, mime) {
+      var parts = mime.indexOf('csv') >= 0 ? ['﻿', text] : [text];
+      var blob = new Blob(parts, { type: mime });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    };
+    window.zyproShare = async function (title, text) {
+      try {
+        if (navigator.share) { await navigator.share({ title: title, text: text }); return 'shared'; }
+      } catch (e) { if (e && e.name === 'AbortError') return 'cancelled'; }
+      try { await navigator.clipboard.writeText(text); return 'copied'; } catch (e) { return 'failed'; }
+    };
+    window.zyproPrintHtml = function (html) {
+      var f = document.createElement('iframe');
+      f.setAttribute('aria-hidden', 'true');
+      f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+      document.body.appendChild(f);
+      var d = f.contentWindow.document;
+      d.open(); d.write(html); d.close();
+      setTimeout(function () {
+        try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) {}
+        setTimeout(function () { f.remove(); }, 60000);
+      }, 500);
+    };
+    window.zyproFullscreen = function (on) {
+      try {
+        if (on && !document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+        if (!on && document.fullscreenElement) document.exitFullscreen();
+      } catch (e) {}
+    };
+
     window.addEventListener('flutter-first-frame', function () {
       var s = document.getElementById('splash');
       if (s) s.remove();

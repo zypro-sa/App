@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'models.dart';
 import 'repository.dart';
+import 'report_models.dart';
 import 'section_models.dart';
 import '../core/i18n.dart';
 
@@ -591,10 +592,35 @@ class SectionRepository {
   }
 
   // ---------------- التقارير ----------------
-  Future<ReportSummary> report(DateTime from, DateTime to) async {
-    final res = await _db.rpc('report_summary', params: {'p_from': _isoDate(from), 'p_to': _isoDate(to)});
-    return ReportSummary.fromMap(Map<String, dynamic>.from(res as Map));
+  Future<ReportData> reportDashboard(DateTime from, DateTime to, {String? member}) async {
+    final res = await _db.rpc('report_dashboard', params: {
+      'p_from': _isoDate(from),
+      'p_to': _isoDate(to),
+      if (member != null) 'p_member': member,
+    });
+    return ReportData(Map<String, dynamic>.from(res as Map));
   }
+
+  Future<List<ReportRow>> reportList(String kind, DateTime from, DateTime to, {String? member}) async {
+    final res = await _db.rpc('report_list', params: {
+      'p_kind': kind,
+      'p_from': _isoDate(from),
+      'p_to': _isoDate(to),
+      if (member != null) 'p_member': member,
+    });
+    return (res as List).map((e) => ReportRow(Map<String, dynamic>.from(e as Map))).toList();
+  }
+
+  Future<void> saveGoal(DateTime month, String metric, num target) => _db.from('report_goals').upsert(
+        {'month': _isoDate(DateTime(month.year, month.month)), 'metric': metric, 'target': target},
+        onConflict: 'month,metric',
+      );
+
+  Future<void> deleteGoal(DateTime month, String metric) => _db
+      .from('report_goals')
+      .delete()
+      .eq('month', _isoDate(DateTime(month.year, month.month)))
+      .eq('metric', metric);
 }
 
 // ---------------- مزوّدات Riverpod ----------------
@@ -647,8 +673,9 @@ final manageRowsProvider = FutureProvider.family<List<Map<String, dynamic>>, Str
 );
 final trashProvider = FutureProvider<List<TrashItem>>((ref) => ref.watch(sectionRepoProvider).trash());
 
-final reportProvider = FutureProvider.family<ReportSummary, (DateTime, DateTime)>(
-  (ref, p) => ref.watch(sectionRepoProvider).report(p.$1, p.$2),
+/// (من، إلى، عضو)
+final reportDashboardProvider = FutureProvider.family<ReportData, (DateTime, DateTime, String?)>(
+  (ref, k) => ref.watch(sectionRepoProvider).reportDashboard(k.$1, k.$2, member: k.$3),
 );
 
 final requestDetailProvider = FutureProvider.family<RequestDetail, String>(
@@ -682,6 +709,7 @@ void refreshSections(WidgetRef ref) {
   ref.invalidate(invoicesProvider);
   ref.invalidate(financeSummaryProvider);
   ref.invalidate(quotesProvider);
+  ref.invalidate(reportDashboardProvider);
   ref.invalidate(daftraStateProvider);
   ref.invalidate(notesProvider);
   ref.invalidate(teamMembersProvider);
@@ -691,7 +719,6 @@ void refreshSections(WidgetRef ref) {
   ref.invalidate(statusLabelsProvider);
   ref.invalidate(manageRowsProvider);
   ref.invalidate(trashProvider);
-  ref.invalidate(reportProvider);
   ref.invalidate(requestDetailProvider);
   ref.invalidate(clientRequestsProvider);
   ref.invalidate(requestInvoicesProvider);

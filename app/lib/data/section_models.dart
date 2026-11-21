@@ -552,51 +552,6 @@ class TrashItem {
       );
 }
 
-// ---------------- التقارير ----------------
-class ReportSummary {
-  ReportSummary({
-    required this.closedRequests,
-    required this.previousClosed,
-    required this.avgDays,
-    required this.onTimePct,
-    required this.tasksDone,
-    required this.tasksTotal,
-    required this.weekly,
-    required this.team,
-  });
-
-  final int closedRequests;
-  final int previousClosed;
-  final num? avgDays;
-  final int? onTimePct;
-  final int tasksDone;
-  final int tasksTotal;
-  final List<(DateTime, int)> weekly;
-  final List<(String, int, int?)> team; // الاسم، المنجز، نسبة الالتزام
-
-  int? get changePct =>
-      previousClosed == 0 ? null : (((closedRequests - previousClosed) / previousClosed) * 100).round();
-
-  factory ReportSummary.fromMap(Map<String, dynamic> m) => ReportSummary(
-        closedRequests: _num(m['closed_requests']).toInt(),
-        previousClosed: _num(m['previous_closed_requests']).toInt(),
-        avgDays: m['avg_days'] == null ? null : _num(m['avg_days']),
-        onTimePct: m['on_time_pct'] == null ? null : _num(m['on_time_pct']).toInt(),
-        tasksDone: _num(m['tasks_done']).toInt(),
-        tasksTotal: _num(m['tasks_total']).toInt(),
-        weekly: ((m['weekly'] ?? []) as List)
-            .map((w) => (DateTime.parse(w['week'] as String), _num(w['count']).toInt()))
-            .toList(),
-        team: ((m['team'] ?? []) as List)
-            .map((t) => (
-                  (t['name'] ?? '') as String,
-                  _num(t['done']).toInt(),
-                  t['on_time_pct'] == null ? null : _num(t['on_time_pct']).toInt(),
-                ))
-            .toList(),
-      );
-}
-
 // ---------------- تفاصيل الطلب وخطواته ----------------
 class RequestStep {
   RequestStep({required this.id, required this.title, required this.isDone, required this.sortOrder, this.doneAt});
@@ -712,6 +667,7 @@ class NotificationKinds {
     ('followup_due', tr('المتابعات المستحقة'), tr('عند حلول موعد أي متابعة')),
     ('assigned', tr('إسناد جديد'), tr('فور إسناد مهمة أو طلب إليك')),
     ('quote_no_reply', tr('عروض أسعار بلا رد'), tr('بعد ٣ أيام من الإرسال (لصلاحية المالية)')),
+    ('weekly_summary', tr('الملخص الأسبوعي'), tr('صباح كل أحد ٨ ص: أهم الأرقام والتنبيهات (لصلاحية التقارير)')),
   ];
 }
 
