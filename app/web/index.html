@@ -152,6 +152,55 @@
       } catch (e) {}
     };
 
+    // ---- «تذكرني» وقفل التطبيق ببصمة الوجه/الإصبع (WebAuthn على الجهاز) ----
+    window.zyproSessionFlag = function (set) {
+      try {
+        if (set) sessionStorage.setItem('zypro_active', '1');
+        return sessionStorage.getItem('zypro_active') === '1';
+      } catch (e) { return true; }
+    };
+    function zyproB64(buf) {
+      var b = new Uint8Array(buf), s = '';
+      for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+      return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    function zyproFromB64(str) {
+      str = str.replace(/-/g, '+').replace(/_/g, '/');
+      while (str.length % 4) str += '=';
+      var s = atob(str), b = new Uint8Array(s.length);
+      for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
+      return b;
+    }
+    window.zyproBioAvailable = async function () {
+      try {
+        return !!(window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable &&
+          await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
+      } catch (e) { return false; }
+    };
+    window.zyproBioRegister = async function (userId, name) {
+      try {
+        var cred = await navigator.credentials.create({ publicKey: {
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          rp: { name: 'Zypro' },
+          user: { id: new TextEncoder().encode(userId).slice(0, 64), name: name, displayName: name },
+          pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+          authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged' },
+          timeout: 60000, attestation: 'none'
+        } });
+        return cred ? zyproB64(cred.rawId) : 'error:none';
+      } catch (e) { return 'error:' + ((e && e.name) || 'unknown'); }
+    };
+    window.zyproBioVerify = async function (id) {
+      try {
+        var res = await navigator.credentials.get({ publicKey: {
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          allowCredentials: [{ type: 'public-key', id: zyproFromB64(id), transports: ['internal', 'hybrid'] }],
+          userVerification: 'required', timeout: 60000
+        } });
+        return res ? 'ok' : 'error:none';
+      } catch (e) { return 'error:' + ((e && e.name) || 'unknown'); }
+    };
+
     window.addEventListener('flutter-first-frame', function () {
       var s = document.getElementById('splash');
       if (s) s.remove();

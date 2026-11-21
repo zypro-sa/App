@@ -37,3 +37,47 @@ void fullscreen(bool on) {
     _fullscreen(on.toJS);
   } catch (_) {}
 }
+
+@JS('zyproSessionFlag')
+external JSBoolean _sessionFlag(JSBoolean set);
+
+@JS('zyproBioAvailable')
+external JSPromise<JSBoolean> _bioAvailable();
+
+@JS('zyproBioRegister')
+external JSPromise<JSString> _bioRegister(JSString userId, JSString name);
+
+@JS('zyproBioVerify')
+external JSPromise<JSString> _bioVerify(JSString id);
+
+bool sessionFlag(bool set) {
+  try {
+    return _sessionFlag(set.toJS).toDart;
+  } catch (_) {
+    return true;
+  }
+}
+
+Future<bool> bioAvailable() async {
+  try {
+    return (await _bioAvailable().toDart).toDart;
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<String> bioRegister(String userId, String name) async {
+  try {
+    return (await _bioRegister(userId.toJS, name.toJS).toDart).toDart;
+  } catch (_) {
+    return 'error:unknown';
+  }
+}
+
+Future<String> bioVerify(String credentialId) async {
+  try {
+    return (await _bioVerify(credentialId.toJS).toDart).toDart;
+  } catch (_) {
+    return 'error:unknown';
+  }
+}

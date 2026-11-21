@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/section_models.dart';
 import '../features/account/account_screen.dart';
 import '../features/daftra/daftra_screen.dart';
+import '../features/auth/lock_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/set_password_screen.dart';
 import '../features/finance/finance_screen.dart';
@@ -210,6 +211,9 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) maybeOfferBio(context);
+    });
     return Scaffold(
       body: DaftraAutoSync(child: shell),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/security.dart';
 import '../../core/theme.dart';
+import '../../core/web/web_tools.dart';
 import '../../widgets/common.dart';
 import '../../core/i18n.dart';
 import '../../widgets/forms.dart';
@@ -23,6 +26,13 @@ class _LoginScreenState extends State<LoginScreen> {
   final _password = TextEditingController();
   bool _signUp = false;
   bool _busy = false;
+  bool _remember = AuthPrefs.remember;
+
+  @override
+  void initState() {
+    super.initState();
+    _email.text = AuthPrefs.savedEmail ?? '';
+  }
 
   @override
   void dispose() {
@@ -74,9 +84,15 @@ class _LoginScreenState extends State<LoginScreen> {
           setState(() => _signUp = false);
         }
       } else {
+        await AuthPrefs.setRemember(_remember, _email.text.trim());
+        sessionFlag(set: true);
+        pendingBioOffer = true;
         await auth.signInWithPassword(email: _email.text.trim(), password: _password.text);
+        // يحفظ المتصفح/الآيفون كلمة المرور في سلسلة المفاتيح لتُملأ لاحقًا بـ Face ID
+        TextInput.finishAutofillContext();
       }
     } on AuthException catch (e) {
+      pendingBioOffer = false;
       if (mounted) showSnack(context, _authMessage(e));
     } catch (e) {
       if (mounted) showSnack(context, tr('حدث خطأ: {0}', [e]));
@@ -100,7 +116,8 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
-            child: Form(
+            child: AutofillGroup(
+              child: Form(
               key: _form,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -136,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     keyboardType: TextInputType.emailAddress,
                     textDirection: TextDirection.ltr,
                     textInputAction: TextInputAction.next,
-                    autofillHints: const [AutofillHints.email],
+                    autofillHints: const [AutofillHints.username, AutofillHints.email],
                     validator: (v) => (v == null || !v.contains('@')) ? tr('أدخل بريدًا صحيحًا') : null,
                   ),
                   const SizedBox(height: 12),
@@ -145,17 +162,30 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: InputDecoration(labelText: tr('كلمة المرور')),
                     obscureText: true,
                     textDirection: TextDirection.ltr,
-                    autofillHints: const [AutofillHints.password],
+                    autofillHints: _signUp ? const [AutofillHints.newPassword] : const [AutofillHints.password],
                     onFieldSubmitted: (_) => _submit(),
                     validator: (v) => (v == null || v.length < 8) ? tr('٨ أحرف على الأقل') : null,
                   ),
                   if (!_signUp)
-                    Align(
-                      alignment: AlignmentDirectional.centerEnd,
-                      child: TextButton(
-                        onPressed: _busy ? null : _forgotPassword,
-                        child: Text(tr('نسيت كلمة المرور؟')),
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () => setState(() => _remember = !_remember),
+                            child: Row(
+                              children: [
+                                Checkbox(value: _remember, onChanged: (v) => setState(() => _remember = v ?? true)),
+                                Flexible(child: Text(tr('تذكرني'), style: const TextStyle(fontSize: 14))),
+                              ],
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _busy ? null : _forgotPassword,
+                          child: Text(tr('نسيت كلمة المرور؟')),
+                        ),
+                      ],
                     ),
                   const SizedBox(height: 12),
                   FilledButton(
@@ -171,6 +201,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
               ),
+            ),
             ),
           ),
         ),
