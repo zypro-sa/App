@@ -9,6 +9,7 @@ import '../../data/repository.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/display_toggles.dart';
+import '../quick_add/quick_add_sheet.dart';
 import '../../core/i18n.dart';
 
 /// ١ · لوحة اليوم
@@ -55,6 +56,21 @@ class _Header extends StatelessWidget {
           children: [
             Image.asset(AppAssets.wordmark, height: 26, semanticLabel: 'Zypro'),
             const Spacer(),
+            IconButton(
+              tooltip: tr('إضافة بالصوت'),
+              onPressed: () => showQuickAdd(context, voice: true),
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.primarySoft,
+                foregroundColor: AppColors.accentText,
+                fixedSize: const Size(38, 38),
+                minimumSize: const Size(38, 38),
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              iconSize: 20,
+              icon: const Icon(Icons.mic_none),
+            ),
+            const SizedBox(width: 6),
             const DisplayToggles(),
           ],
         ),

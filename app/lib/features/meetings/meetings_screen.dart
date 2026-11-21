@@ -8,6 +8,9 @@ import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../widgets/common.dart';
 import '../../core/i18n.dart';
+import '../../core/voice/command_parser.dart';
+import '../../widgets/voice_input.dart';
+import '../../core/permissions.dart';
 
 /// ٤ · الاجتماعات
 class MeetingsScreen extends ConsumerStatefulWidget {
@@ -273,7 +276,9 @@ class _MeetingCardExpanded extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => showSnack(context, tr('تحويل القرارات لمهام: في المرحلة القادمة')),
+                  onPressed: () => (m.minutes ?? '').trim().isEmpty
+                      ? _openMinutes(context, m)
+                      : openTasksFromMinutes(context, m, m.minutes!),
                   child: Text(tr('تحويل القرارات لمهام'), textAlign: TextAlign.center),
                 ),
               ),
@@ -313,15 +318,29 @@ class _MinutesSheetState extends ConsumerState<_MinutesSheet> {
     super.dispose();
   }
 
-  Future<void> _save() async {
+  Future<void> _dictate() async {
+    final text = await listenForSpeech(context, continuous: true);
+    if (text == null || text.trim().isEmpty || !mounted) return;
+    final cur = _controller.text.trimRight();
+    _controller.text = cur.isEmpty ? text.trim() : '$cur\n${text.trim()}';
+    _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
+  }
+
+  Future<void> _save({bool thenTasks = false}) async {
     setState(() => _saving = true);
     try {
-      await ref.read(repositoryProvider).saveMinutes(widget.meeting.id, _controller.text.trim());
+      final text = _controller.text.trim();
+      await ref.read(repositoryProvider).saveMinutes(widget.meeting.id, text);
       refreshAll(ref);
       if (mounted) {
         final messenger = ScaffoldMessenger.of(context);
-        Navigator.pop(context);
+        final nav = Navigator.of(context);
+        final rootContext = nav.context;
+        nav.pop();
         messenger.showSnackBar(SnackBar(content: Text(tr('تم حفظ المحضر'))));
+        if (thenTasks && text.isNotEmpty && rootContext.mounted) {
+          await openTasksFromMinutes(rootContext, widget.meeting, text);
+        }
       }
     } catch (e) {
       if (mounted) showSnack(context, tr('تعذّر الحفظ: {0}', [e]));
@@ -338,8 +357,25 @@ class _MinutesSheetState extends ConsumerState<_MinutesSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(tr('محضر: {0}', [widget.meeting.title]), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(tr('محضر: {0}', [widget.meeting.title]),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              ),
+              IconButton.filledTonal(
+                tooltip: tr('إملاء بالصوت'),
+                onPressed: _saving ? null : _dictate,
+                icon: const Icon(Icons.mic_none),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            tr('اكتب كل مهمة في سطر يبدأ بـ «-»، مثل: - أحمد يرسل العرض يوم الخميس'),
+            style: TextStyle(fontSize: 12, color: AppColors.muted),
+          ),
+          const SizedBox(height: 10),
           TextField(
             controller: _controller,
             minLines: 6,
@@ -347,7 +383,213 @@ class _MinutesSheetState extends ConsumerState<_MinutesSheet> {
             decoration: InputDecoration(hintText: tr('ما الذي نوقش؟ وما القرارات؟')),
           ),
           const SizedBox(height: 16),
-          FilledButton(onPressed: _saving ? null : _save, child: Text(tr('حفظ المحضر'))),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _saving ? null : () => _save(thenTasks: true),
+                  child: Text(tr('حفظ وتحويل لمهام'), textAlign: TextAlign.center),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(onPressed: _saving ? null : _save, child: Text(tr('حفظ المحضر'))),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// اقتراح المهام من المحضر، ومراجعتها، ثم إنشاؤها.
+Future<void> openTasksFromMinutes(BuildContext context, Meeting m, String minutes) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    useSafeArea: true,
+    backgroundColor: AppColors.surface,
+    builder: (_) => _TasksFromMinutesSheet(meeting: m, minutes: minutes),
+  );
+}
+
+class _TasksFromMinutesSheet extends ConsumerStatefulWidget {
+  const _TasksFromMinutesSheet({required this.meeting, required this.minutes});
+  final Meeting meeting;
+  final String minutes;
+
+  @override
+  ConsumerState<_TasksFromMinutesSheet> createState() => _TasksFromMinutesSheetState();
+}
+
+class _TasksFromMinutesSheetState extends ConsumerState<_TasksFromMinutesSheet> {
+  List<MinuteTask>? _items;
+  final Map<int, String?> _assignee = {};
+  final Map<int, DateTime?> _due = {};
+  final Map<int, TextEditingController> _titles = {};
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    for (final c in _titles.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _build(List<Profile> team) {
+    if (_items != null) return;
+    final items = extractTasks(widget.minutes, team: [for (final p in team) NamedRef(p.id, p.name)]);
+    _items = items;
+    for (var i = 0; i < items.length; i++) {
+      _assignee[i] = items[i].parsed.assigneeId;
+      _due[i] = items[i].parsed.when;
+      _titles[i] = TextEditingController(text: items[i].parsed.title);
+    }
+  }
+
+  Future<void> _pickDue(int i) async {
+    final now = DateTime.now();
+    final d = await showDatePicker(
+      context: context,
+      initialDate: _due[i] ?? now,
+      firstDate: now.subtract(const Duration(days: 30)),
+      lastDate: now.add(const Duration(days: 365 * 2)),
+    );
+    if (d != null) setState(() => _due[i] = d);
+  }
+
+  Future<void> _create() async {
+    final items = _items ?? const [];
+    final chosen = [for (var i = 0; i < items.length; i++) if (items[i].selected && _titles[i]!.text.trim().isNotEmpty) i];
+    if (chosen.isEmpty) {
+      showSnack(context, tr('اختر مهمة واحدة على الأقل'));
+      return;
+    }
+    setState(() => _busy = true);
+    final repo = ref.read(repositoryProvider);
+    try {
+      for (final i in chosen) {
+        await repo.createTaskFromMinutes(
+          meetingId: widget.meeting.id,
+          title: _titles[i]!.text.trim(),
+          assigneeId: _assignee[i],
+          dueAt: _due[i],
+          clientId: widget.meeting.clientId,
+        );
+      }
+      refreshAll(ref);
+      if (mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        Navigator.pop(context);
+        messenger.showSnackBar(SnackBar(content: Text(tr('أُنشئت {0} مهام من المحضر', [chosen.length]))));
+      }
+    } catch (e) {
+      if (mounted) showSnack(context, tr('تعذّرت الإضافة: {0}', [e]));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final team = ref.watch(teamProvider).valueOrNull;
+    final me = ref.watch(profileProvider).valueOrNull;
+    final canAssign = me?.can(Permissions.tasksAssign) ?? false;
+    if (team == null) {
+      return const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()));
+    }
+    _build(team);
+    final items = _items!;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(tr('تحويل القرارات لمهام'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(
+            items.any((t) => t.selected)
+                ? tr('اقترحتُ هذه المهام من المحضر · راجعها ثم أنشئها')
+                : tr('لم أجد أسطرًا واضحة كمهام · اختر ما تريد تحويله'),
+            style: TextStyle(fontSize: 12, color: AppColors.muted),
+          ),
+          const SizedBox(height: 12),
+          if (items.isEmpty)
+            EmptyState(tr('المحضر فارغ'), icon: Icons.notes)
+          else
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: items.length,
+                separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.divider),
+                itemBuilder: (_, i) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Checkbox(
+                        value: items[i].selected,
+                        onChanged: (v) => setState(() => items[i].selected = v ?? false),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            TextField(
+                              controller: _titles[i],
+                              minLines: 1,
+                              maxLines: 3,
+                              style: const TextStyle(fontSize: 14),
+                              decoration: const InputDecoration(isDense: true),
+                            ),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                if (canAssign)
+                                  PopupMenuButton<String>(
+                                    tooltip: tr('المسؤول'),
+                                    onSelected: (v) => setState(() => _assignee[i] = v),
+                                    itemBuilder: (_) => [
+                                      for (final p in team) PopupMenuItem(value: p.id, child: Text(p.name)),
+                                    ],
+                                    child: Chip(
+                                      avatar: const Icon(Icons.person_outline, size: 16),
+                                      label: Text(
+                                        team.where((p) => p.id == _assignee[i]).map((p) => p.name).firstOrNull ?? tr('أنا'),
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                  ),
+                                ActionChip(
+                                  avatar: const Icon(Icons.event_outlined, size: 16),
+                                  label: Text(
+                                    _due[i] == null ? tr('بدون موعد') : relativeDay(_due[i]!),
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  onPressed: () => _pickDue(i),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 14),
+          FilledButton(
+            onPressed: _busy || items.isEmpty ? null : _create,
+            child: Text(tr('إنشاء المهام المختارة ({0})', [items.where((t) => t.selected).length])),
+          ),
         ],
       ),
     );

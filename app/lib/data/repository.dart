@@ -195,6 +195,48 @@ class Repository {
     return rows.map(Meeting.fromMap).toList();
   }
 
+  /// مهمة من محضر اجتماع: تُسجَّل كقرار في الاجتماع وتُربط بالمهمة.
+  Future<void> createTaskFromMinutes({
+    required String meetingId,
+    required String title,
+    String? assigneeId,
+    DateTime? dueAt,
+    String? clientId,
+  }) async {
+    String? decisionId;
+    try {
+      final d = await _db
+          .from('decisions')
+          .insert({
+            'meeting_id': meetingId,
+            'text': title,
+            'owner_id': assigneeId ?? _uid,
+            if (dueAt != null) 'due_date': dueAt.toIso8601String().substring(0, 10),
+          })
+          .select('id')
+          .single();
+      decisionId = d['id'] as String;
+    } catch (_) {
+      // بدون صلاحية الاجتماعات: نُنشئ المهمة فقط
+    }
+    final t = await _db
+        .from('tasks')
+        .insert({
+          'title': title,
+          'priority': 'medium',
+          'assignee_id': assigneeId ?? _uid,
+          'assigned_by_id': _uid,
+          if (dueAt != null) 'due_at': _iso(dueAt),
+          if (clientId != null) 'client_id': clientId,
+          if (decisionId != null) 'source_decision_id': decisionId,
+        })
+        .select('id')
+        .single();
+    if (decisionId != null) {
+      await _db.from('decisions').update({'task_id': t['id']}).eq('id', decisionId);
+    }
+  }
+
   Future<void> saveMinutes(String meetingId, String minutes) => _db
       .from('meetings')
       .update({'minutes': minutes, 'status': 'done'}).eq('id', meetingId);
