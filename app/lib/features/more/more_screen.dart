@@ -76,7 +76,7 @@ class MoreScreen extends ConsumerWidget {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
-                  if (can(Permissions.settingsFields) || can(Permissions.settingsLists) || can(Permissions.dataDelete)) ...[
+                  if (can(Permissions.settingsFields) || can(Permissions.settingsLists) || can(Permissions.dataDelete) || can(Permissions.settingsListsView) || can(Permissions.settingsFieldsView) || can(Permissions.statusesView)) ...[
                     ListTile(
                       title: Text(tr('لوحة التحكم والإعدادات'), style: TextStyle(fontWeight: FontWeight.w600)),
                       trailing: Icon(AppIcons.forward),

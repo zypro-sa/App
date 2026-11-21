@@ -26,8 +26,8 @@ class _SectionSettingsScreenState extends ConsumerState<SectionSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final me = ref.watch(profileProvider).valueOrNull;
-    final canFields = me?.can(Permissions.settingsFields) ?? false;
-    final canLists = canFields || (me?.can(Permissions.settingsLists) ?? false);
+    bool can(String k) => me?.can(k) ?? false;
+    final canFields = can(Permissions.settingsFieldsEdit);
     return Scaffold(
       appBar: sectionAppBar(tr('إعدادات {0}', [widget.entity.label]), subtitle: tr('ما يظهر في نموذج الإضافة وعلى البطاقة')),
       body: ListView(
@@ -44,8 +44,15 @@ class _SectionSettingsScreenState extends ConsumerState<SectionSettingsScreen> {
             onSelectionChanged: (s) => setState(() => _tab = s.first),
           ),
           const SizedBox(height: 14),
-          if (_tab == 0) _FieldsTab(entity: widget.entity, editable: canFields),
-          if (_tab == 1) _ListsTab(entity: widget.entity, canEditStatuses: canFields, canEditOptions: canLists),
+          if (_tab == 0)
+            _FieldsTab(entity: widget.entity, editable: canFields, canAdd: can(Permissions.settingsFieldsAdd)),
+          if (_tab == 1)
+            _ListsTab(
+              entity: widget.entity,
+              canEditStatuses: can(Permissions.statusesEdit),
+              canAddOptions: can(Permissions.settingsListsAdd) || can(Permissions.settingsListsEdit),
+              canDeleteOptions: can(Permissions.settingsListsDelete) || can(Permissions.settingsListsEdit),
+            ),
           if (_tab == 2) _DataTab(entity: widget.entity),
         ],
       ),
@@ -55,7 +62,8 @@ class _SectionSettingsScreenState extends ConsumerState<SectionSettingsScreen> {
 
 // ---------------- الحقول ----------------
 class _FieldsTab extends ConsumerWidget {
-  const _FieldsTab({required this.entity, required this.editable});
+  const _FieldsTab({required this.entity, required this.editable, this.canAdd = false});
+  final bool canAdd;
   final ConfigEntity entity;
   final bool editable;
 
@@ -179,7 +187,7 @@ class _FieldsTab extends ConsumerWidget {
               ],
             ),
           ),
-          if (editable) ...[
+          if (canAdd) ...[
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: () => showFormSheet(context, FieldEditorSheet(entity: entity, nextOrder: list.length + 1)),
@@ -354,7 +362,7 @@ class _FieldEditorSheetState extends ConsumerState<FieldEditorSheet> {
             onChanged: (v) => setState(() => _onCard = v),
           ),
         ]),
-        if (!_isNew && !widget.field!.isSystem) ...[
+        if (!_isNew && !widget.field!.isSystem && (ref.watch(profileProvider).valueOrNull?.can(Permissions.settingsFieldsDelete) ?? false)) ...[
           const SizedBox(height: 12),
           TextButton.icon(
             onPressed: _delete,
@@ -369,10 +377,16 @@ class _FieldEditorSheetState extends ConsumerState<FieldEditorSheet> {
 
 // ---------------- القوائم ----------------
 class _ListsTab extends ConsumerWidget {
-  const _ListsTab({required this.entity, required this.canEditStatuses, required this.canEditOptions});
+  const _ListsTab({
+    required this.entity,
+    required this.canEditStatuses,
+    required this.canAddOptions,
+    required this.canDeleteOptions,
+  });
+  final bool canAddOptions;
+  final bool canDeleteOptions;
   final ConfigEntity entity;
   final bool canEditStatuses;
-  final bool canEditOptions;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -405,7 +419,7 @@ class _ListsTab extends ConsumerWidget {
                     Row(
                       children: [
                         Expanded(child: Text(f.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700))),
-                        if (canEditOptions)
+                        if (canAddOptions)
                         OutlinedButton(
                           style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34)),
                           onPressed: () async {
@@ -424,7 +438,7 @@ class _ListsTab extends ConsumerWidget {
                         for (final o in f.options)
                           InputChip(
                             label: Text(o),
-                            onDeleted: canEditOptions ? () => saveOptions(f, f.options.where((x) => x != o).toList()) : null,
+                            onDeleted: canDeleteOptions ? () => saveOptions(f, f.options.where((x) => x != o).toList()) : null,
                           ),
                       ],
                     ),

@@ -1,7 +1,7 @@
-// إدارة الأعضاء للمالك: تعديل البيانات، تغيير كلمة المرور، الإيقاف، الحذف النهائي.
+// إدارة الأعضاء (المالك، ومن يملك صلاحية الفريق): تعديل البيانات، تغيير كلمة المرور، الإيقاف، الحذف النهائي.
 // تُنشر على Supabase باسم: admin-users
 //
-// الطلب (POST, JSON) — المالك فقط:
+// الطلب (POST, JSON) — التعديل يحتاج team.edit، والإيقاف والحذف team.delete:
 //   { action: "update", user_id, name?, job_title?, phone?, email? }
 //   { action: "set_password", user_id, password }
 //   { action: "set_active", user_id, active: boolean }
@@ -37,7 +37,13 @@ Deno.serve(async (req) => {
     const { data: auth, error: authError } = await admin.auth.getUser(token);
     if (authError || !auth.user) return json({ error: "يجب تسجيل الدخول" }, 401);
     const { data: me } = await admin.from("profiles").select("role, is_active").eq("id", auth.user.id).single();
-    if (me?.role !== "owner" || !me.is_active) return json({ error: "هذا الإجراء للمالك فقط" }, 403);
+    if (!me?.is_active) return json({ error: "الحساب غير مفعّل" }, 403);
+    const isOwner = me.role === "owner";
+    const can = async (p: string) => {
+      if (isOwner) return true;
+      const { data } = await admin.rpc("perm_of", { p_user: auth.user!.id, p });
+      return data === true;
+    };
 
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "");
@@ -47,6 +53,10 @@ Deno.serve(async (req) => {
     const { data: target } = await admin.from("profiles").select("id, role, email").eq("id", userId).single();
     if (!target) return json({ error: "العضو غير موجود" }, 404);
     const isSelf = userId === auth.user.id;
+    // غير المالك لا يدير نفسه ولا المالك
+    if (!isOwner && (isSelf || target.role === "owner")) return json({ error: "لا يمكنك تعديل هذا الحساب" }, 403);
+    const needed = action === "set_active" || action === "delete" ? "team.delete" : "team.edit";
+    if (!(await can(needed))) return json({ error: "ليست لديك صلاحية لهذا الإجراء" }, 403);
 
     switch (action) {
       case "update": {

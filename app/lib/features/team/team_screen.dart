@@ -21,6 +21,8 @@ class TeamScreen extends ConsumerWidget {
     final team = ref.watch(teamMembersProvider);
     final me = ref.watch(profileProvider).valueOrNull;
     final isOwner = me?.role == UserRole.owner;
+    final canInvite = isOwner || (me?.can(Permissions.teamAdd) ?? false);
+    final canManage = isOwner || (me?.can(Permissions.teamEdit) ?? false) || (me?.can(Permissions.teamDelete) ?? false);
     final list = team.valueOrNull ?? const <TeamMember>[];
     final pendingCount = list.where((m) => m.pending && m.isActive).length;
 
@@ -34,7 +36,7 @@ class TeamScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
           children: [
-            if (isOwner) ...[
+            if (canInvite) ...[
               FilledButton.icon(
                 style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
                 onPressed: () => showFormSheet(context, const InviteMemberSheet()),
@@ -80,7 +82,7 @@ class TeamScreen extends ConsumerWidget {
                         children: [
                           for (var i = 0; i < members.length; i++) ...[
                             if (i > 0) Divider(height: 1, color: AppColors.divider),
-                            _MemberTile(members[i], isMe: members[i].id == me?.id, canOpen: isOwner),
+                            _MemberTile(members[i], isMe: members[i].id == me?.id, canOpen: canManage || (me?.can(Permissions.teamView) ?? false)),
                           ],
                         ],
                       ),
@@ -93,7 +95,7 @@ class TeamScreen extends ConsumerWidget {
                         CardBox(
                           radius: 16,
                           borderColor: AppColors.lineStrong,
-                          onTap: isOwner ? () => context.go('/more/team/${m.id}') : null,
+                          onTap: canManage ? () => context.go('/more/team/${m.id}') : null,
                           child: Row(
                             children: [
                               Expanded(
@@ -102,12 +104,12 @@ class TeamScreen extends ConsumerWidget {
                                   children: [
                                     Text(m.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                                     Text(m.email, textDirection: TextDirection.ltr, style: TextStyle(fontSize: 12, color: AppColors.muted)),
-                                    Text(isOwner ? tr('{0} · اضغط لتحديد الصلاحيات', [m.role.label]) : m.role.label,
+                                    Text(canManage ? tr('{0} · اضغط لتحديد الصلاحيات', [m.role.label]) : m.role.label,
                                         style: TextStyle(fontSize: 12, color: AppColors.muted)),
                                   ],
                                 ),
                               ),
-                              if (isOwner)
+                              if (canInvite)
                                 OutlinedButton(
                                   onPressed: () => runAction(
                                     context,
@@ -335,7 +337,8 @@ class MemberScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final team = ref.watch(teamMembersProvider);
     final repo = ref.read(sectionRepoProvider);
-    final isOwner = ref.watch(profileProvider).valueOrNull?.role == UserRole.owner;
+    final me = ref.watch(profileProvider).valueOrNull;
+    final isOwner = me?.role == UserRole.owner;
 
     return Scaffold(
       appBar: AppBar(title: Text(tr('العضو')), centerTitle: true),
@@ -345,11 +348,13 @@ class MemberScreen extends ConsumerWidget {
         builder: (all) {
           final m = all.where((x) => x.id == memberId).firstOrNull;
           if (m == null) return EmptyState(tr('العضو غير موجود'));
-          final editable = isOwner && m.role != UserRole.owner;
+          final notSelfOrOwner = m.role != UserRole.owner && m.id != me?.id;
+          final editable = notSelfOrOwner && (isOwner || (me?.can(Permissions.teamEdit) ?? false));
+          final canRemove = notSelfOrOwner && (isOwner || (me?.can(Permissions.teamDelete) ?? false));
           final customized = [
             for (final mod in Permissions.modules)
-              for (final a in PermAction.values)
-                if (mod.supports(a) && m.isCustomized(mod.keyOf(a))) 1
+              for (final k in mod.allKeys)
+                if (m.isCustomized(k)) 1
           ].length;
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
@@ -372,7 +377,7 @@ class MemberScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    if (isOwner)
+                    if (editable)
                       IconButton(
                         tooltip: tr('تعديل البيانات'),
                         icon: const Icon(Icons.edit_outlined),
@@ -425,7 +430,7 @@ class MemberScreen extends ConsumerWidget {
               const SizedBox(height: 18),
               Row(
                 children: [
-                  Expanded(child: _Label(tr('الصلاحيات'), hint: tr('اضغط على اسم القسم لشرح كل صلاحية'))),
+                  Expanded(child: _Label(tr('الصلاحيات'), hint: tr('الإطار الأصفر يعني أنها تختلف عن الافتراضي لدوره'))),
                   if (editable && customized > 0)
                     TextButton(
                       onPressed: () async {
@@ -438,13 +443,13 @@ class MemberScreen extends ConsumerWidget {
                     ),
                 ],
               ),
-              _PermissionMatrix(member: m, editable: editable),
+              _PermissionCards(member: m, editable: editable),
               if (m.role == UserRole.owner)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(tr('المالك يملك كل الصلاحيات دائمًا'), style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 ),
-              if (editable) ...[
+              if (editable || canRemove) ...[
                 const SizedBox(height: 18),
                 _Label(tr('الحساب')),
                 CardBox(
@@ -452,13 +457,16 @@ class MemberScreen extends ConsumerWidget {
                   padding: EdgeInsets.zero,
                   child: Column(
                     children: [
+                      if (editable) ...[
                       ListTile(
                         leading: const Icon(Icons.password),
                         title: Text(tr('تغيير كلمة المرور')),
                         trailing: Icon(AppIcons.forward),
                         onTap: () => showFormSheet(context, _SetPasswordSheet(member: m)),
                       ),
-                      Divider(height: 1, color: AppColors.divider),
+                      if (canRemove) Divider(height: 1, color: AppColors.divider),
+                      ],
+                      if (canRemove) ...[
                       ListTile(
                         leading: Icon(m.isActive ? Icons.block : Icons.check_circle_outline,
                             color: m.isActive ? AppColors.waiting : AppColors.done),
@@ -491,6 +499,7 @@ class MemberScreen extends ConsumerWidget {
                             style: TextStyle(fontSize: 12, color: AppColors.muted)),
                         onTap: () => showFormSheet(context, _DeleteMemberSheet(member: m, team: all)),
                       ),
+                      ],
                     ],
                   ),
                 ),
@@ -521,13 +530,11 @@ class _Label extends StatelessWidget {
       );
 }
 
-/// جدول الصلاحيات: كل قسم في صف، وأمامه عرض/إضافة/تعديل/حذف.
-class _PermissionMatrix extends ConsumerWidget {
-  const _PermissionMatrix({required this.member, required this.editable});
+/// الصلاحيات: بطاقة لكل قسم، فيها نطاق العرض (إن وُجد) ثم بقية الصلاحيات.
+class _PermissionCards extends ConsumerWidget {
+  const _PermissionCards({required this.member, required this.editable});
   final TeamMember member;
   final bool editable;
-
-  static const _cell = 46.0;
 
   Future<void> _save(BuildContext context, WidgetRef ref, Map<String, bool> changes) async {
     final m = member;
@@ -553,148 +560,141 @@ class _PermissionMatrix extends ConsumerWidget {
     for (final mod in Permissions.modules) {
       groups.putIfAbsent(mod.group, () => []).add(mod);
     }
-    Widget header() => Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 4, 6),
-          child: Row(
-            children: [
-              Expanded(child: Text(tr('القسم'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.muted))),
-              for (final a in PermAction.values)
-                SizedBox(
-                  width: _cell,
-                  child: Text(a.label,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.muted)),
-                ),
-            ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final g in groups.entries) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 6, bottom: 6),
+            child: Text(g.key, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.muted)),
           ),
-        );
+          for (final mod in g.value) ...[
+            _card(context, ref, mod),
+            const SizedBox(height: 8),
+          ],
+        ],
+      ],
+    );
+  }
 
+  Widget _card(BuildContext context, WidgetRef ref, PermModule mod) {
+    final m = member;
+    final custom = mod.allKeys.any(m.isCustomized);
     return CardBox(
       radius: 16,
-      padding: EdgeInsets.zero,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          header(),
-          for (final g in groups.entries) ...[
-            Container(
-              color: AppColors.background,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-              child: Text(g.key, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.subtle)),
-            ),
-            for (var i = 0; i < g.value.length; i++) ...[
-              if (i > 0) Divider(height: 1, color: AppColors.divider),
-              _row(context, ref, g.value[i]),
+          Row(
+            children: [
+              Expanded(child: Text(mod.label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700))),
+              if (custom) Pill.info(tr('مخصص')),
             ],
+          ),
+          if (mod.note != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(mod.note!, style: TextStyle(fontSize: 12, color: AppColors.muted)),
+            ),
+          if (mod.scoped) ...[
+            const SizedBox(height: 10),
+            Text(tr('العرض'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.subtle)),
+            const SizedBox(height: 6),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<int>(
+                showSelectedIcon: false,
+                style: SegmentedButton.styleFrom(
+                  textStyle: const TextStyle(fontSize: 12),
+                  visualDensity: VisualDensity.compact,
+                ),
+                segments: [
+                  ButtonSegment(value: 2, label: Text(tr(mod.scopeAllAr!), textAlign: TextAlign.center)),
+                  ButtonSegment(value: 1, label: Text(tr(mod.scopeOwnAr!), textAlign: TextAlign.center)),
+                  ButtonSegment(value: 0, label: Text(tr('لا شيء'))),
+                ],
+                selected: {m.can(mod.viewAllKey) ? 2 : (m.can(mod.viewOwnKey) ? 1 : 0)},
+                onSelectionChanged: editable
+                    ? (v) => _save(context, ref, {mod.viewAllKey: v.first == 2, mod.viewOwnKey: v.first >= 1})
+                    : null,
+              ),
+            ),
           ],
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final item in mod.items)
+                Tooltip(
+                  message: item.note,
+                  child: FilterChip(
+                    label: Text(item.label),
+                    selected: m.can(mod.keyOf(item.action)),
+                    showCheckmark: true,
+                    side: m.isCustomized(mod.keyOf(item.action))
+                        ? BorderSide(color: AppColors.waiting, width: 1.5)
+                        : BorderSide(color: AppColors.line),
+                    selectedColor: AppColors.primarySoft,
+                    checkmarkColor: AppColors.accentText,
+                    onSelected: editable ? (v) => _save(context, ref, {mod.keyOf(item.action): v}) : null,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          InkWell(
+            onTap: () => _explain(context, mod),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(tr('ماذا تعني كل صلاحية؟'),
+                  style: TextStyle(fontSize: 12, color: AppColors.accentText, fontWeight: FontWeight.w600)),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _row(BuildContext context, WidgetRef ref, PermModule mod) {
-    final m = member;
-    return InkWell(
-      onTap: () => _details(context, ref, mod),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
-        child: Row(
-          children: [
-            Expanded(
-              child: Row(
-                children: [
-                  Flexible(child: Text(mod.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
-                  const SizedBox(width: 4),
-                  Icon(Icons.info_outline, size: 14, color: AppColors.faint),
-                ],
-              ),
-            ),
-            for (final a in PermAction.values)
-              SizedBox(
-                width: _cell,
-                height: 44,
-                child: !mod.supports(a)
-                    ? Center(child: Text('—', style: TextStyle(color: AppColors.faint)))
-                    : Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Checkbox(
-                            value: m.can(mod.keyOf(a)),
-                            onChanged: editable ? (v) => _save(context, ref, {mod.keyOf(a): v ?? false}) : null,
-                          ),
-                          if (m.isCustomized(mod.keyOf(a)))
-                            PositionedDirectional(
-                              top: 6,
-                              end: 8,
-                              child: Container(
-                                width: 6,
-                                height: 6,
-                                decoration: BoxDecoration(color: AppColors.waiting, shape: BoxShape.circle),
-                              ),
-                            ),
-                        ],
-                      ),
-              ),
-          ],
+  void _explain(BuildContext context, PermModule mod) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: AppColors.surface,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(mod.label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              if (mod.note != null) Text(mod.note!, style: TextStyle(fontSize: 12, color: AppColors.muted)),
+              const SizedBox(height: 8),
+              if (mod.scoped) ...[
+                _line(tr(mod.scopeAllAr!), tr('يرى كل السجلات في هذا القسم')),
+                _line(tr(mod.scopeOwnAr!), tr('يرى ما يخصه فقط')),
+                _line(tr('لا شيء'), tr('لا يظهر له هذا القسم')),
+              ],
+              for (final i in mod.items) _line(i.label, i.note),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// شرح صلاحيات القسم مع مفاتيح لكل إجراء
-  void _details(BuildContext context, WidgetRef ref, PermModule mod) {
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      backgroundColor: AppColors.surface,
-      builder: (ctx) => Consumer(
-        builder: (ctx, ref, _) {
-          final m = ref.watch(teamMembersProvider).valueOrNull?.where((x) => x.id == member.id).firstOrNull ?? member;
-          final keys = [for (final a in PermAction.values) if (mod.supports(a)) mod.keyOf(a)];
-          final allOn = keys.every(m.can);
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: Text(mod.label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
-                      if (editable && keys.length > 1)
-                        TextButton(
-                          onPressed: () => _MatrixSaver(member: m).save(ctx, ref, {for (final k in keys) k: !allOn}),
-                          child: Text(allOn ? tr('إلغاء الكل') : tr('تفعيل الكل')),
-                        ),
-                    ],
-                  ),
-                  for (final a in PermAction.values)
-                    if (mod.supports(a))
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        value: m.can(mod.keyOf(a)),
-                        onChanged: editable ? (v) => _MatrixSaver(member: m).save(ctx, ref, {mod.keyOf(a): v}) : null,
-                        title: Text(a.label, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Text(mod.note(a), style: TextStyle(fontSize: 12, color: AppColors.muted)),
-                      ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// حفظ الصلاحيات من نافذة التفاصيل (بأحدث نسخة من العضو)
-class _MatrixSaver {
-  _MatrixSaver({required this.member});
-  final TeamMember member;
-
-  Future<void> save(BuildContext context, WidgetRef ref, Map<String, bool> changes) =>
-      _PermissionMatrix(member: member, editable: true)._save(context, ref, changes);
+  Widget _line(String title, String body) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            Text(body, style: TextStyle(fontSize: 12, color: AppColors.muted)),
+          ],
+        ),
+      );
 }
 
 /// تعديل بيانات عضو (للمالك)
