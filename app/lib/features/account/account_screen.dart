@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/i18n.dart';
+import '../../core/security.dart';
+import '../../core/web/web_tools.dart';
+import '../auth/lock_screen.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
@@ -132,6 +135,8 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 label: Text(tr('تغيير كلمة المرور')),
                 style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
               ),
+              const SizedBox(height: 20),
+              _SecurityCard(userId: p.id, email: p.email ?? ''),
             ],
           );
         },
@@ -262,6 +267,82 @@ class _ChangePasswordSheetState extends ConsumerState<_ChangePasswordSheet> {
           obscureText: !_show,
           textDirection: TextDirection.ltr,
           decoration: InputDecoration(labelText: tr('تأكيد كلمة المرور')),
+        ),
+      ],
+    );
+  }
+}
+
+/// الأمان على هذا الجهاز: تذكرني، وقفل التطبيق بـ Face ID أو البصمة
+class _SecurityCard extends StatefulWidget {
+  const _SecurityCard({required this.userId, required this.email});
+  final String userId;
+  final String email;
+
+  @override
+  State<_SecurityCard> createState() => _SecurityCardState();
+}
+
+class _SecurityCardState extends State<_SecurityCard> {
+  bool? _available;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    bioAvailable().then((v) {
+      if (mounted) setState(() => _available = v);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lock = AuthPrefs.lockEnabledFor(widget.userId);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionHeader(tr('الأمان على هذا الجهاز')),
+        CardBox(
+          radius: 16,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Column(
+            children: [
+              SwitchListTile(
+                value: lock,
+                secondary: const Icon(Icons.face_retouching_natural),
+                title: Text(tr('قفل التطبيق بـ Face ID أو البصمة')),
+                subtitle: Text(
+                  _available == false
+                      ? tr('غير مدعوم على هذا الجهاز أو المتصفح')
+                      : tr('يُطلب عند فتح التطبيق وبعد ٥ دقائق في الخلفية'),
+                  style: TextStyle(fontSize: 12, color: AppColors.muted),
+                ),
+                onChanged: _available != true || _busy
+                    ? null
+                    : (on) async {
+                        setState(() => _busy = true);
+                        if (on) {
+                          await enableBioLock(context);
+                        } else {
+                          await AuthPrefs.disableLock();
+                        }
+                        if (mounted) setState(() => _busy = false);
+                      },
+              ),
+              Divider(height: 1, color: AppColors.divider),
+              SwitchListTile(
+                value: AuthPrefs.remember,
+                secondary: const Icon(Icons.how_to_reg_outlined),
+                title: Text(tr('تذكرني')),
+                subtitle: Text(tr('البقاء مسجّلًا بعد إغلاق التطبيق، وحفظ البريد لتسجيل الدخول'),
+                    style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                onChanged: (on) async {
+                  await AuthPrefs.setRemember(on, widget.email);
+                  if (mounted) setState(() {});
+                },
+              ),
+            ],
+          ),
         ),
       ],
     );

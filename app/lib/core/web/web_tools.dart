@@ -12,3 +12,15 @@ void printHtml(String html) => impl.printHtml(html);
 
 /// ملء الشاشة (لشاشة المكتب).
 void setFullscreen(bool on) => impl.fullscreen(on);
+
+/// علامة الجلسة الحالية (تُمسح عند إغلاق التطبيق) — لخيار «تذكرني»
+bool sessionFlag({bool set = false}) => impl.sessionFlag(set);
+
+/// هل يدعم الجهاز Face ID / البصمة؟
+Future<bool> bioAvailable() => impl.bioAvailable();
+
+/// تسجيل بصمة الجهاز؛ يعيد معرّف الاعتماد أو نصًا يبدأ بـ error:
+Future<String> bioRegister(String userId, String name) => impl.bioRegister(userId, name);
+
+/// التحقق بالبصمة؛ يعيد ok أو error:...
+Future<String> bioVerify(String credentialId) => impl.bioVerify(credentialId);

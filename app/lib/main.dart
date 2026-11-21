@@ -9,8 +9,10 @@ import 'core/app_settings.dart';
 import 'core/config.dart';
 import 'core/i18n.dart';
 import 'core/router.dart';
+import 'core/security.dart';
 import 'core/theme.dart';
 import 'data/repository.dart';
+import 'features/auth/lock_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +27,7 @@ Future<void> main() async {
     url: AppConfig.supabaseUrl,
     publishableKey: AppConfig.supabaseKey,
   );
+  await applyStartupSecurity();
   runApp(const ProviderScope(child: PersonalAssistantApp()));
 }
 
@@ -37,11 +40,28 @@ class PersonalAssistantApp extends ConsumerStatefulWidget {
 
 class _PersonalAssistantAppState extends ConsumerState<PersonalAssistantApp> with WidgetsBindingObserver {
   String? _applied;
+  DateTime? _hiddenAt;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // عند تسجيل الخروج يُرفع القفل
+    Supabase.instance.client.auth.onAuthStateChange.listen((s) {
+      if (s.session == null) appLocked.value = false;
+    });
+  }
+
+  // إعادة القفل بعد ٥ دقائق في الخلفية
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.hidden || state == AppLifecycleState.paused) {
+      _hiddenAt ??= DateTime.now();
+    } else if (state == AppLifecycleState.resumed) {
+      final at = _hiddenAt;
+      _hiddenAt = null;
+      if (at != null && DateTime.now().difference(at) > const Duration(minutes: 5)) lockIfNeeded();
+    }
   }
 
   @override
@@ -97,6 +117,15 @@ class _PersonalAssistantAppState extends ConsumerState<PersonalAssistantApp> wit
       theme: buildTheme(),
       themeMode: ThemeMode.light, // الألوان تُحسب في buildTheme حسب الاختيار
       routerConfig: appRouter,
+      builder: (context, child) => ValueListenableBuilder<bool>(
+        valueListenable: appLocked,
+        builder: (context, locked, _) => Stack(
+          children: [
+            if (child != null) AbsorbPointer(absorbing: locked, child: ExcludeSemantics(excluding: locked, child: child)),
+            if (locked) const Positioned.fill(child: LockScreen()),
+          ],
+        ),
+      ),
       locale: Locale(settings.locale),
       supportedLocales: const [Locale('ar'), Locale('en')],
       localizationsDelegates: const [
