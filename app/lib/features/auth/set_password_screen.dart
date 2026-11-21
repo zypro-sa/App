@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/security.dart';
 import '../../core/router.dart' show passwordRecovery;
 import '../../core/theme.dart';
 import '../../widgets/common.dart';
@@ -41,6 +42,7 @@ class _SetPasswordScreenState extends State<SetPasswordScreen> {
       await Supabase.instance.client.auth.updateUser(
         UserAttributes(password: _p1.text, data: {'needs_password': false}),
       );
+      await AuthPrefs.clearBioLogin();
       passwordRecovery.value = false;
     } on AuthException catch (e) {
       if (mounted) showSnack(context, e.message);

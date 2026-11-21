@@ -87,13 +87,48 @@ class _LoginScreenState extends State<LoginScreen> {
         await AuthPrefs.setRemember(_remember, _email.text.trim());
         sessionFlag(set: true);
         pendingBioOffer = true;
+        lastLoginPassword = _password.text;
         await auth.signInWithPassword(email: _email.text.trim(), password: _password.text);
         // يحفظ المتصفح/الآيفون كلمة المرور في سلسلة المفاتيح لتُملأ لاحقًا بـ Face ID
         TextInput.finishAutofillContext();
       }
     } on AuthException catch (e) {
       pendingBioOffer = false;
+      lastLoginPassword = null;
       if (mounted) showSnack(context, _authMessage(e));
+    } catch (e) {
+      if (mounted) showSnack(context, tr('حدث خطأ: {0}', [e]));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// الدخول بـ Face ID: فك كلمة المرور المحفوظة بعد التحقق ثم تسجيل الدخول
+  Future<void> _bioLogin() async {
+    final cred = AuthPrefs.credentialId, sealed = AuthPrefs.bioSecret, email = AuthPrefs.bioEmail;
+    if (cred == null || sealed == null || email == null) return;
+    setState(() => _busy = true);
+    try {
+      final res = await bioOpen(cred, sealed);
+      if (!res.startsWith('ok:')) {
+        if (mounted) {
+          showSnack(context, res.contains('NotAllowed') ? tr('أُلغي التحقق') : tr('تعذّر التحقق — ادخل بكلمة المرور'));
+        }
+        return;
+      }
+      await AuthPrefs.setRemember(_remember, email);
+      sessionFlag(set: true);
+      await Supabase.instance.client.auth.signInWithPassword(email: email, password: res.substring(3));
+    } on AuthException catch (e) {
+      if (e.message.toLowerCase().contains('invalid login')) {
+        await AuthPrefs.clearBioLogin();
+        if (mounted) {
+          showSnack(context, tr('تغيّرت كلمة المرور — ادخل بها مرة واحدة ليُعاد تفعيل Face ID'));
+          setState(() {});
+        }
+      } else if (mounted) {
+        showSnack(context, _authMessage(e));
+      }
     } catch (e) {
       if (mounted) showSnack(context, tr('حدث خطأ: {0}', [e]));
     } finally {
@@ -138,6 +173,32 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: AppColors.muted),
                   ),
                   const SizedBox(height: 32),
+                  if (!_signUp && AuthPrefs.hasBioLogin) ...[
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
+                      onPressed: _busy ? null : _bioLogin,
+                      icon: const Icon(Icons.face_retouching_natural),
+                      label: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(tr('الدخول بـ Face ID'), style: const TextStyle(fontSize: 16)),
+                          Text(AuthPrefs.bioEmail ?? '', textDirection: TextDirection.ltr, style: const TextStyle(fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        const Expanded(child: Divider()),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(tr('أو بكلمة المرور'), style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                        ),
+                        const Expanded(child: Divider()),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   if (_signUp) ...[
                     TextFormField(
                       controller: _name,

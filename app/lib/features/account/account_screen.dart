@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/i18n.dart';
 import '../../core/security.dart';
@@ -295,6 +296,30 @@ class _SecurityCardState extends State<_SecurityCard> {
     });
   }
 
+  Future<String?> _askPassword() async {
+    final c = TextEditingController();
+    final v = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr('أدخل كلمة المرور الحالية')),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          obscureText: true,
+          textDirection: TextDirection.ltr,
+          decoration: InputDecoration(labelText: tr('كلمة المرور')),
+          onSubmitted: (t) => Navigator.pop(ctx, t),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('إلغاء'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, c.text), child: Text(tr('متابعة'))),
+        ],
+      ),
+    );
+    c.dispose();
+    return (v == null || v.isEmpty) ? null : v;
+  }
+
   @override
   Widget build(BuildContext context) {
     final lock = AuthPrefs.lockEnabledFor(widget.userId);
@@ -327,6 +352,35 @@ class _SecurityCardState extends State<_SecurityCard> {
                           await AuthPrefs.disableLock();
                         }
                         if (mounted) setState(() => _busy = false);
+                      },
+              ),
+              Divider(height: 1, color: AppColors.divider),
+              SwitchListTile(
+                value: AuthPrefs.hasBioLogin,
+                secondary: const Icon(Icons.key_outlined),
+                title: Text(tr('الدخول بـ Face ID دون كلمة المرور')),
+                subtitle: Text(tr('تُحفظ كلمة المرور مشفّرة على هذا الجهاز ولا تُفك إلا بعد التحقق'),
+                    style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                onChanged: _available != true || _busy
+                    ? null
+                    : (on) async {
+                        if (!on) {
+                          await AuthPrefs.clearBioLogin();
+                          if (mounted) setState(() {});
+                          return;
+                        }
+                        final pwd = await _askPassword();
+                        if (pwd == null || !mounted) return;
+                        setState(() => _busy = true);
+                        try {
+                          // التأكد من صحة كلمة المرور قبل حفظها
+                          await Supabase.instance.client.auth.signInWithPassword(email: widget.email, password: pwd);
+                          if (mounted) await enableBioLogin(context, pwd);
+                        } on AuthException catch (_) {
+                          if (mounted) showSnack(context, tr('كلمة المرور غير صحيحة'));
+                        } finally {
+                          if (mounted) setState(() => _busy = false);
+                        }
                       },
               ),
               Divider(height: 1, color: AppColors.divider),

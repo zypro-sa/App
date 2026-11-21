@@ -184,8 +184,9 @@
           rp: { name: 'Zypro' },
           user: { id: new TextEncoder().encode(userId).slice(0, 64), name: name, displayName: name },
           pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-          authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged' },
-          timeout: 60000, attestation: 'none'
+          authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
+          timeout: 60000, attestation: 'none',
+          extensions: { prf: {} }
         } });
         return cred ? zyproB64(cred.rawId) : 'error:none';
       } catch (e) { return 'error:' + ((e && e.name) || 'unknown'); }
@@ -198,6 +199,38 @@
           userVerification: 'required', timeout: 60000
         } });
         return res ? 'ok' : 'error:none';
+      } catch (e) { return 'error:' + ((e && e.name) || 'unknown'); }
+    };
+
+    // حفظ كلمة المرور مشفّرة بمفتاح لا يُستخرج إلا بعد Face ID (امتداد PRF)
+    async function zyproPrfKey(id) {
+      var res = await navigator.credentials.get({ publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [{ type: 'public-key', id: zyproFromB64(id), transports: ['internal', 'hybrid'] }],
+        userVerification: 'required', timeout: 60000,
+        extensions: { prf: { eval: { first: new TextEncoder().encode('zypro-login-key-v1') } } }
+      } });
+      var ext = res && res.getClientExtensionResults ? res.getClientExtensionResults() : {};
+      var out = ext && ext.prf && ext.prf.results && ext.prf.results.first;
+      if (!out) { var err = new Error('no prf'); err.name = 'NoPrf'; throw err; }
+      return crypto.subtle.importKey('raw', out, 'AES-GCM', false, ['encrypt', 'decrypt']);
+    }
+    window.zyproBioSeal = async function (id, text) {
+      try {
+        var key = await zyproPrfKey(id);
+        var iv = crypto.getRandomValues(new Uint8Array(12));
+        var ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, new TextEncoder().encode(text));
+        var all = new Uint8Array(12 + ct.byteLength);
+        all.set(iv); all.set(new Uint8Array(ct), 12);
+        return zyproB64(all.buffer);
+      } catch (e) { return 'error:' + ((e && e.name) || 'unknown'); }
+    };
+    window.zyproBioOpen = async function (id, sealed) {
+      try {
+        var key = await zyproPrfKey(id);
+        var all = zyproFromB64(sealed);
+        var pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: all.slice(0, 12) }, key, all.slice(12));
+        return 'ok:' + new TextDecoder().decode(pt);
       } catch (e) { return 'error:' + ((e && e.name) || 'unknown'); }
     };
 

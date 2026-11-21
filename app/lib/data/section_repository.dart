@@ -10,6 +10,7 @@ import 'repository.dart';
 import 'report_models.dart';
 import 'section_models.dart';
 import '../core/i18n.dart';
+import '../core/security.dart';
 
 SupabaseClient get _db => Supabase.instance.client;
 String get _uid => _db.auth.currentUser!.id;
@@ -337,7 +338,10 @@ class SectionRepository {
   /// يُرسل رابط تأكيد للبريد الجديد؛ يتغير البريد بعد الضغط عليه
   Future<void> changeMyEmail(String email) => _db.auth.updateUser(UserAttributes(email: email.trim()));
 
-  Future<void> changeMyPassword(String password) => _db.auth.updateUser(UserAttributes(password: password));
+  Future<void> changeMyPassword(String password) async {
+    await _db.auth.updateUser(UserAttributes(password: password));
+    await AuthPrefs.clearBioLogin(); // كلمة المرور المحفوظة لـ Face ID لم تعد صالحة
+  }
 
   Future<void> uploadMyAvatar(List<int> bytes, String mime) async {
     final uid = _db.auth.currentUser!.id;
