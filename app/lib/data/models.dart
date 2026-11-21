@@ -319,13 +319,27 @@ class FollowUp {
 }
 
 class Client {
-  Client({required this.id, required this.name, this.status, this.sector, this.city});
+  Client({
+    required this.id,
+    required this.name,
+    this.status,
+    this.sector,
+    this.city,
+    this.crNumber,
+    this.vatNumber,
+    this.address,
+    this.fromDaftra = false,
+  });
 
   final String id;
   final String name;
   final String? status;
   final String? sector;
   final String? city;
+  final String? crNumber;
+  final String? vatNumber;
+  final String? address;
+  final bool fromDaftra;
 
   String get initial => name.isEmpty ? tr('؟') : name.characters.first;
 
@@ -335,12 +349,17 @@ class Client {
         status: m['status'] as String?,
         sector: m['sector'] as String?,
         city: m['city'] as String?,
+        crNumber: m['cr_number'] as String?,
+        vatNumber: m['vat_number'] as String?,
+        address: m['address'] as String?,
+        fromDaftra: m['daftra_id'] != null,
       );
 }
 
 class Contact {
-  Contact({required this.name, this.position, this.phone, this.email, this.isPrimary = false});
+  Contact({this.id = '', required this.name, this.position, this.phone, this.email, this.isPrimary = false});
 
+  final String id;
   final String name;
   final String? position;
   final String? phone;
@@ -348,6 +367,7 @@ class Contact {
   final bool isPrimary;
 
   factory Contact.fromMap(Map<String, dynamic> m) => Contact(
+        id: (m['id'] ?? '') as String,
         name: m['name'] as String,
         position: m['position'] as String?,
         phone: m['phone'] as String?,
@@ -364,8 +384,11 @@ class ClientDetail {
     required this.contractsValue,
     required this.amountDue,
     required this.activity,
+    this.summaryError,
   });
 
+  /// إن تعذّر حساب الأرقام لا نُخفي بقية الملف
+  final String? summaryError;
   final Client client;
   final List<Contact> contacts;
   final int openRequests;
