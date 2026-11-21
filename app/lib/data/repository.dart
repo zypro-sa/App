@@ -278,25 +278,49 @@ class Repository {
   }
 
   Future<ClientDetail> clientDetail(String id) async {
-    final results = await Future.wait<dynamic>([
-      _db.from('clients').select().eq('id', id).single(),
-      _db.from('contacts').select().eq('client_id', id).isFilter('deleted_at', null),
-      _db.from('client_summary').select().eq('id', id).maybeSingle(),
-      _db
-          .from('activity_log')
-          .select('action, created_at')
-          .eq('client_id', id)
-          .order('created_at', ascending: false)
-          .limit(10),
+    final client = await _db.from('clients').select().eq('id', id).single();
+
+    List<dynamic> contacts = const [];
+    Map<String, dynamic>? summary;
+    List<dynamic> activity = const [];
+    String? summaryError;
+    await Future.wait<void>([
+      () async {
+        contacts = await _db
+            .from('contacts')
+            .select()
+            .eq('client_id', id)
+            .isFilter('deleted_at', null)
+            .order('is_primary', ascending: false)
+            .order('created_at', ascending: true);
+      }(),
+      () async {
+        try {
+          summary = await _db.from('client_summary').select().eq('id', id).maybeSingle();
+        } catch (e) {
+          summaryError = '$e';
+        }
+      }(),
+      () async {
+        try {
+          activity = await _db
+              .from('activity_log')
+              .select('action, created_at')
+              .eq('client_id', id)
+              .order('created_at', ascending: false)
+              .limit(10);
+        } catch (_) {}
+      }(),
     ]);
-    final summary = results[2] as Map<String, dynamic>?;
+    num n(Object? v) => v is num ? v : num.tryParse('${v ?? 0}') ?? 0;
     return ClientDetail(
-      client: Client.fromMap(results[0] as Map<String, dynamic>),
-      contacts: (results[1] as List).map((m) => Contact.fromMap(m)).toList(),
-      openRequests: (summary?['open_requests'] ?? 0) as int,
-      contractsValue: (summary?['contracts_value'] ?? 0) as num,
-      amountDue: (summary?['amount_due'] ?? 0) as num,
-      activity: (results[3] as List)
+      client: Client.fromMap(client),
+      contacts: contacts.map((m) => Contact.fromMap(Map<String, dynamic>.from(m as Map))).toList(),
+      openRequests: n(summary?['open_requests']).toInt(),
+      contractsValue: n(summary?['contracts_value']),
+      amountDue: n(summary?['amount_due']),
+      summaryError: summaryError,
+      activity: activity
           .map((m) => ActivityEntry(
                 m['action'] as String,
                 DateTime.parse(m['created_at'] as String).toLocal(),
@@ -304,6 +328,40 @@ class Repository {
           .toList(),
     );
   }
+
+  Future<void> updateClient(String id, Map<String, dynamic> changes) =>
+      _db.from('clients').update(changes).eq('id', id);
+
+  Future<void> saveContact({
+    String? id,
+    required String clientId,
+    required String name,
+    String? position,
+    String? phone,
+    String? email,
+    bool isPrimary = false,
+  }) async {
+    String? clean(String? v) => (v == null || v.trim().isEmpty) ? null : v.trim();
+    final row = {
+      'client_id': clientId,
+      'name': name.trim(),
+      'position': clean(position),
+      'phone': clean(phone),
+      'email': clean(email),
+      'is_primary': isPrimary,
+    };
+    if (isPrimary) {
+      await _db.from('contacts').update({'is_primary': false}).eq('client_id', clientId).neq('id', id ?? '00000000-0000-0000-0000-000000000000');
+    }
+    if (id == null || id.isEmpty) {
+      await _db.from('contacts').insert(row);
+    } else {
+      await _db.from('contacts').update(row).eq('id', id);
+    }
+  }
+
+  Future<void> deleteContact(String id) =>
+      _db.from('contacts').update({'deleted_at': DateTime.now().toUtc().toIso8601String()}).eq('id', id);
 
   Future<String> createClient(
     String name, {
