@@ -322,7 +322,7 @@ class _SecurityCardState extends State<_SecurityCard> {
 
   @override
   Widget build(BuildContext context) {
-    final lock = AuthPrefs.lockEnabledFor(widget.userId);
+    final on = AuthPrefs.lockEnabledFor(widget.userId) || AuthPrefs.hasBioLogin;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -333,39 +333,21 @@ class _SecurityCardState extends State<_SecurityCard> {
           child: Column(
             children: [
               SwitchListTile(
-                value: lock,
+                value: on,
                 secondary: const Icon(Icons.face_retouching_natural),
-                title: Text(tr('قفل التطبيق بـ Face ID أو البصمة')),
+                title: Text(tr('الدخول والقفل بـ Face ID أو البصمة')),
                 subtitle: Text(
                   _available == false
                       ? tr('غير مدعوم على هذا الجهاز أو المتصفح')
-                      : tr('يُطلب عند فتح التطبيق وبعد ٥ دقائق في الخلفية'),
+                      : tr('تدخل دون كتابة كلمة المرور، ويُطلب التحقق عند فتح التطبيق وبعد ٥ دقائق في الخلفية'),
                   style: TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
-                onChanged: _available != true || _busy
+                onChanged: _available == false || _busy
                     ? null
-                    : (on) async {
-                        setState(() => _busy = true);
-                        if (on) {
-                          await enableBioLock(context);
-                        } else {
-                          await AuthPrefs.disableLock();
-                        }
-                        if (mounted) setState(() => _busy = false);
-                      },
-              ),
-              Divider(height: 1, color: AppColors.divider),
-              SwitchListTile(
-                value: AuthPrefs.hasBioLogin,
-                secondary: const Icon(Icons.key_outlined),
-                title: Text(tr('الدخول بـ Face ID دون كلمة المرور')),
-                subtitle: Text(tr('تُحفظ كلمة المرور مشفّرة على هذا الجهاز ولا تُفك إلا بعد التحقق'),
-                    style: TextStyle(fontSize: 12, color: AppColors.muted)),
-                onChanged: _available != true || _busy
-                    ? null
-                    : (on) async {
-                        if (!on) {
+                    : (v) async {
+                        if (!v) {
                           await AuthPrefs.clearBioLogin();
+                          await AuthPrefs.disableLock();
                           if (mounted) setState(() {});
                           return;
                         }
@@ -375,7 +357,11 @@ class _SecurityCardState extends State<_SecurityCard> {
                         try {
                           // التأكد من صحة كلمة المرور قبل حفظها
                           await Supabase.instance.client.auth.signInWithPassword(email: widget.email, password: pwd);
-                          if (mounted) await enableBioLogin(context, pwd);
+                          if (!mounted) return;
+                          await enableBioLogin(context, pwd);
+                          if (mounted && AuthPrefs.credentialFor(widget.userId) != null) {
+                            await enableBioLock(context, quiet: AuthPrefs.hasBioLogin);
+                          }
                         } on AuthException catch (_) {
                           if (mounted) showSnack(context, tr('كلمة المرور غير صحيحة'));
                         } finally {

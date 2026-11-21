@@ -172,9 +172,10 @@
       return b;
     }
     window.zyproBioAvailable = async function () {
+      // نكتفي بوجود WebAuthn: بعض إصدارات iOS (خاصة التطبيق المضاف للشاشة الرئيسية)
+      // تُرجع false لفحص المصادقة المدمجة رغم أن Face ID يعمل فعليًا؛ المحاولة نفسها هي الحكم.
       try {
-        return !!(window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable &&
-          await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
+        return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create && window.isSecureContext);
       } catch (e) { return false; }
     };
     window.zyproBioRegister = async function (userId, name) {

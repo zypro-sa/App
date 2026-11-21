@@ -1235,4 +1235,6 @@ const Map<String, String> enStrings = {
   'تُحفظ كلمة المرور مشفّرة على هذا الجهاز ولا تُفك إلا بعد التحقق': 'Password is stored encrypted on this device and unlocked only after verification',
   'كلمة المرور غير صحيحة': 'Incorrect password',
   'أدخل كلمة المرور الحالية': 'Enter your current password',
+  'الدخول والقفل بـ Face ID أو البصمة': 'Sign in & lock with Face ID or fingerprint',
+  'تدخل دون كتابة كلمة المرور، ويُطلب التحقق عند فتح التطبيق وبعد ٥ دقائق في الخلفية': 'Sign in without typing your password; verification is asked when opening the app and after 5 minutes in the background',
 };
