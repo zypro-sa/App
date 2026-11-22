@@ -96,7 +96,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             ? me.name
             : members.where((m) => m.id == member).map((m) => m.name).firstOrNull;
 
-    return DefaultTabController(
+    return AmountsScope(child: DefaultTabController(
       key: ValueKey('${tabs.length}-$whole'),
       length: tabs.length,
       child: Scaffold(
@@ -104,6 +104,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           !canAll || _mine ? tr('تقريري') : tr('التقارير'),
           subtitle: memberName == null ? filter.label : tr('{0} · {1}', [memberName, filter.label]),
           actions: [
+            if (canFinance) const AmountsToggle(),
             if (canAll)
               IconButton(
                 tooltip: tr('عرض على شاشة المكتب'),
@@ -163,7 +164,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Future<void> _export(String kind, ReportData d, ReportFilter f, String? memberName) async {
@@ -171,11 +172,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final name = 'zypro-report-${ReportFilter.iso(f.from)}_${ReportFilter.iso(f.to)}';
     switch (kind) {
       case 'pdf':
-        printHtml(reportHtml(d, f, labels, memberName: memberName));
+        printHtml(withAmountsShown(() => reportHtml(d, f, labels, memberName: memberName)));
       case 'csv':
-        downloadText('$name.csv', reportCsv(d, f, labels, memberName: memberName));
+        downloadText('$name.csv', withAmountsShown(() => reportCsv(d, f, labels, memberName: memberName)));
       case 'share':
-        final res = await shareText(tr('ملخص التقرير'), reportSummaryText(d, f, memberName: memberName));
+        final res = await shareText(tr('ملخص التقرير'), withAmountsShown(() => reportSummaryText(d, f, memberName: memberName)));
         if (!mounted) return;
         if (res == 'copied') showSnack(context, tr('نُسخ الملخص — الصقه حيث تريد'));
         if (res == 'failed') showSnack(context, tr('تعذّرت المشاركة على هذا الجهاز'));

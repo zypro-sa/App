@@ -161,11 +161,12 @@ class _ReportBuilderScreenState extends ConsumerState<ReportBuilderScreen> {
 
     final form = _form(finance);
 
-    return Scaffold(
+    return AmountsScope(child: Scaffold(
       appBar: sectionAppBar(
         _saved == null ? tr('تقرير جديد') : _saved!.name,
         subtitle: tr('اختر ما تريد قياسه وسيظهر التقرير مباشرة'),
         actions: [
+          const AmountsToggle(),
           Padding(
             padding: const EdgeInsetsDirectional.only(end: 8),
             child: FilledButton.icon(onPressed: _save, icon: const Icon(Icons.bookmark_add_outlined, size: 18), label: Text(tr('حفظ'))),
@@ -190,7 +191,7 @@ class _ReportBuilderScreenState extends ConsumerState<ReportBuilderScreen> {
           children: [preview, const SizedBox(height: 16), ...form],
         );
       }),
-    );
+    ));
   }
 
   List<Widget> _form(bool finance) {

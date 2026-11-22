@@ -219,7 +219,7 @@ class _TvScreenState extends ConsumerState<TvScreen> {
     _slides = slides.length;
     if (_slide >= _slides) _slide = 0;
 
-    return Scaffold(
+    return AmountsScope(child: Scaffold(
       backgroundColor: _Tv.bg,
       body: DefaultTextStyle.merge(
         style: const TextStyle(color: _Tv.text),
@@ -262,7 +262,7 @@ class _TvScreenState extends ConsumerState<TvScreen> {
           }),
         ),
       ),
-    );
+    ));
   }
 
   Widget _header(double s, String title) {
@@ -287,6 +287,7 @@ class _TvScreenState extends ConsumerState<TvScreen> {
         SizedBox(width: 8 * s),
         Text(formatDay(_now), style: TextStyle(fontSize: 15 * s, color: _Tv.muted)),
         SizedBox(width: 12 * s),
+        AmountsToggle(color: _Tv.muted, size: 24 * s),
         _iconBtn(Icons.tune, tr('شرائح العرض'), s, _configure),
         _iconBtn(_paused ? Icons.play_arrow : Icons.pause, _paused ? tr('تشغيل التبديل') : tr('تثبيت الشريحة الحالية'), s,
             () => setState(() => _paused = !_paused)),
