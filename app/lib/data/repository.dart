@@ -248,6 +248,53 @@ class Repository {
         'status': 'scheduled',
       }).eq('id', id);
 
+  /// أعضاء الفريق المشاركون في الاجتماع
+  Future<List<String>> meetingAttendeeIds(String meetingId) async {
+    final rows = await _db
+        .from('meeting_attendees')
+        .select('user_id')
+        .eq('meeting_id', meetingId)
+        .isFilter('deleted_at', null)
+        .not('user_id', 'is', null);
+    return [for (final r in rows) r['user_id'] as String];
+  }
+
+  /// تعديل الاجتماع: البيانات والمكان والمشاركون.
+  /// إذا تغيّر موعد اجتماع مؤجل أو ملغى يعود «مجدولًا».
+  Future<void> updateMeeting(
+    Meeting m, {
+    required String title,
+    required DateTime startAt,
+    required int durationMinutes,
+    required MeetingType type,
+    String? clientId,
+    String? location,
+    required List<String> attendeeIds,
+  }) async {
+    final moved = !startAt.isAtSameMomentAs(m.startAt);
+    await _db.from('meetings').update({
+      'title': title,
+      'start_at': _iso(startAt),
+      'end_at': _iso(startAt.add(Duration(minutes: durationMinutes))),
+      'type': type.db,
+      'client_id': clientId,
+      'location': (location == null || location.trim().isEmpty) ? null : location.trim(),
+      if (moved && (m.status == MeetingStatus.postponed || m.status == MeetingStatus.cancelled)) 'status': 'scheduled',
+    }).eq('id', m.id);
+
+    final current = await meetingAttendeeIds(m.id);
+    final remove = current.where((u) => !attendeeIds.contains(u)).toList();
+    final add = attendeeIds.where((u) => !current.contains(u)).toSet().toList();
+    if (remove.isNotEmpty) {
+      await _db.from('meeting_attendees').delete().eq('meeting_id', m.id).inFilter('user_id', remove);
+    }
+    if (add.isNotEmpty) {
+      await _db.from('meeting_attendees').insert([
+        for (final u in add) {'meeting_id': m.id, 'user_id': u, 'attendance': u == _uid ? 'confirmed' : 'invited'},
+      ]);
+    }
+  }
+
   /// حفظ المحضر؛ الاجتماع المجدول يصبح «منعقدًا»
   Future<void> saveMinutes(String meetingId, String minutes) async {
     await _db.from('meetings').update({'minutes': minutes}).eq('id', meetingId);

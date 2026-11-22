@@ -12,6 +12,7 @@ import '../../core/i18n.dart';
 import '../../core/voice/command_parser.dart';
 import '../../widgets/voice_input.dart';
 import '../../core/permissions.dart';
+import 'edit_meeting_sheet.dart';
 
 /// ٤ · الاجتماعات
 class MeetingsScreen extends ConsumerStatefulWidget {
@@ -686,12 +687,13 @@ class MeetingActions extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final m = meeting;
     final repo = ref.read(repositoryProvider);
+    final canEdit = ref.watch(profileProvider).valueOrNull?.can(Permissions.meetingsManage) ?? false;
     Future<void> setStatus(MeetingStatus s, String done) async {
       if (await runAction(context, () => repo.setMeetingStatus(m.id, s), success: done)) refreshAll(ref);
     }
 
     return PopupMenuButton<String>(
-      tooltip: tr('حالة الاجتماع'),
+      tooltip: tr('خيارات الاجتماع'),
       icon: Icon(Icons.more_vert, color: AppColors.muted),
       onSelected: (v) async {
         switch (v) {
@@ -708,9 +710,12 @@ class MeetingActions extends ConsumerWidget {
             await setStatus(MeetingStatus.scheduled, tr('أُعيد الاجتماع إلى مجدول'));
           case 'minutes':
             await _openMinutes(context, m);
+          case 'edit':
+            await editMeeting(context, ref, m);
         }
       },
       itemBuilder: (_) => [
+        if (canEdit) PopupMenuItem(value: 'edit', child: _item(Icons.edit_outlined, tr('تعديل الاجتماع'), AppColors.ink)),
         if (m.status != MeetingStatus.done)
           PopupMenuItem(value: 'done', child: _item(Icons.check_circle_outline, tr('تم عقد الاجتماع'), AppColors.done)),
         PopupMenuItem(value: 'postpone', child: _item(Icons.event_repeat, tr('تأجيل لموعد جديد'), AppColors.waiting)),
