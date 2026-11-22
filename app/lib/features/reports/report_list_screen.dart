@@ -33,11 +33,12 @@ class ReportListScreen extends ConsumerWidget {
     final f = ReportFilter(from: from, to: to, member: member);
     final heading = title ?? drillTitle(kind);
     final list = rows.valueOrNull;
-    return Scaffold(
+    return AmountsScope(child: Scaffold(
       appBar: sectionAppBar(
         heading,
         subtitle: list == null ? f.label : tr('{0} · {1} عنصر', [f.label, list.length]),
         actions: [
+          const AmountsToggle(),
           IconButton(
             tooltip: tr('تنزيل Excel (CSV)'),
             icon: const Icon(Icons.download_outlined),
@@ -114,6 +115,6 @@ class ReportListScreen extends ConsumerWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 }

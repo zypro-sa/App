@@ -1257,4 +1257,6 @@ const Map<String, String> enStrings = {
   'نهاية القائمة': 'End of list',
   'يوجد محضر': 'Has minutes',
   'لا يوجد محضر': 'No minutes yet',
+  'إظهار المبالغ': 'Show amounts',
+  'إخفاء المبالغ': 'Hide amounts',
 };
