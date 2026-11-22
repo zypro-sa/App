@@ -196,6 +196,27 @@ class Repository {
     return rows.map(Meeting.fromMap).toList();
   }
 
+  /// الاجتماعات السابقة (الأحدث أولًا) مع بحث وتصفية
+  Future<List<Meeting>> pastMeetings({
+    String? query,
+    MeetingStatus? status,
+    bool withoutMinutes = false,
+    int offset = 0,
+    int limit = 30,
+  }) async {
+    var q = _db
+        .from('meetings')
+        .select(Meeting.select)
+        .isFilter('deleted_at', null)
+        .lt('start_at', _iso(DateTime.now()));
+    if (status != null) q = q.eq('status', status.db);
+    if (withoutMinutes) q = q.or('minutes.is.null,minutes.eq.');
+    final text = (query ?? '').replaceAll(RegExp(r'[,()%*\\]'), ' ').trim();
+    if (text.isNotEmpty) q = q.or('title.ilike.*$text*,location.ilike.*$text*,minutes.ilike.*$text*');
+    final rows = await q.order('start_at', ascending: false).range(offset, offset + limit - 1);
+    return rows.map(Meeting.fromMap).toList();
+  }
+
   /// مهمة من محضر اجتماع: تُسجَّل كقرار في الاجتماع وتُربط بالمهمة.
   Future<void> createTaskFromMinutes({
     required String meetingId,

@@ -1248,4 +1248,13 @@ const Map<String, String> enStrings = {
   'المشاركون من الفريق': 'Team attendees',
   'لا يوجد أعضاء': 'No members',
   'خيارات الاجتماع': 'Meeting options',
+  'الاجتماعات السابقة': 'Past meetings',
+  'الأحدث أولًا': 'Newest first',
+  'بلا محضر': 'No minutes',
+  'ابحث بالعنوان أو المكان أو نص المحضر': 'Search by title, place or minutes',
+  'مسح': 'Clear',
+  'لا توجد اجتماعات سابقة مطابقة': 'No matching past meetings',
+  'نهاية القائمة': 'End of list',
+  'يوجد محضر': 'Has minutes',
+  'لا يوجد محضر': 'No minutes yet',
 };
