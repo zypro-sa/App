@@ -30,6 +30,7 @@ import '../features/clients/clients_screen.dart';
 import '../features/followups/followups_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/meetings/meetings_screen.dart';
+import '../features/meetings/past_meetings_screen.dart';
 import '../features/more/more_screen.dart';
 import '../features/quick_add/quick_add_sheet.dart';
 import '../features/requests/request_detail_screen.dart';
@@ -107,7 +108,11 @@ final appRouter = GoRouter(
           GoRoute(path: '/tasks', builder: (_, __) => const TasksScreen()),
         ]),
         StatefulShellBranch(routes: [
-          GoRoute(path: '/meetings', builder: (_, __) => const MeetingsScreen()),
+          GoRoute(
+            path: '/meetings',
+            builder: (_, __) => const MeetingsScreen(),
+            routes: [GoRoute(path: 'past', builder: (_, __) => const PastMeetingsScreen())],
+          ),
         ]),
         StatefulShellBranch(routes: [
           GoRoute(

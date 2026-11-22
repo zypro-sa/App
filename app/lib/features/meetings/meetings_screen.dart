@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/formatters.dart';
@@ -62,6 +63,11 @@ class _MeetingsScreenState extends ConsumerState<MeetingsScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: tr('الاجتماعات السابقة'),
+            onPressed: () => context.push('/meetings/past'),
+            icon: const Icon(Icons.history),
+          ),
           IconButton(tooltip: tr('اختيار تاريخ'), onPressed: _pickMonthDay, icon: const Icon(Icons.calendar_month_outlined)),
           const SizedBox(width: 8),
         ],
@@ -303,6 +309,12 @@ class _MeetingCardExpanded extends StatelessWidget {
     );
   }
 }
+
+/// فتح محضر الاجتماع (يُستخدم أيضًا من شاشة الاجتماعات السابقة)
+Future<void> openMeetingMinutes(BuildContext context, Meeting m) => _openMinutes(context, m);
+
+/// شارة حالة الاجتماع
+Widget meetingStatusPill(MeetingStatus s) => _statusPill(s);
 
 Future<void> _openMinutes(BuildContext context, Meeting m) {
   return showModalBottomSheet(
