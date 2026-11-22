@@ -12,6 +12,7 @@ import '../../data/section_repository.dart';
 import '../../widgets/common.dart';
 import '../daftra/daftra_screen.dart';
 import '../../widgets/forms.dart';
+import '../../core/amounts.dart';
 import '../../core/i18n.dart';
 
 /// ١١ · المالية (للمالك فقط)
@@ -41,11 +42,12 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final canAdd = ref.watch(profileProvider).valueOrNull?.can(Permissions.financeAdd) ?? false;
     final now = DateTime.now();
 
-    return Scaffold(
+    return AmountsScope(child: Scaffold(
       appBar: sectionAppBar(
         tr('المالية'),
         subtitle: DateFormat('MMMM y', L.code).format(now),
         actions: [
+          const AmountsToggle(),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 14),
             child: Pill.neutral(tr('صلاحية خاصة')),
@@ -125,7 +127,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -182,13 +184,13 @@ class _SummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(tr('مستحق التحصيل'), style: TextStyle(fontSize: 13, color: Color(0xFFC9CED6))),
-          Text(money(s.due), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: Colors.white)),
+          Text(_m(s.due), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: Colors.white)),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _mini(tr('متأخر'), money(s.overdue), const Color(0xFFF7B79A))),
+              Expanded(child: _mini(tr('متأخر'), _m(s.overdue), const Color(0xFFF7B79A))),
               const SizedBox(width: 10),
-              Expanded(child: _mini(tr('محصّل هذا الشهر'), money(s.collectedThisMonth), const Color(0xFF9FE0B8))),
+              Expanded(child: _mini(tr('محصّل هذا الشهر'), _m(s.collectedThisMonth), const Color(0xFF9FE0B8))),
             ],
           ),
         ],
@@ -249,7 +251,7 @@ class _InvoiceList extends ConsumerWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(moneyShort(list[i].net), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                        Text(_ms(list[i].net), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 4),
                         _pill(list[i]),
                       ],
@@ -267,9 +269,9 @@ class _InvoiceList extends ConsumerWidget {
   String _subtitle(Invoice i) {
     if (i.isVoid) return tr('ملغاة · لا تُحسب في المستحق');
     final parts = <String>[];
-    if (i.returned > 0) parts.add(tr('مرتجع {0}', [moneyShort(i.returned)]));
+    if (i.returned > 0) parts.add(tr('مرتجع {0}', [_ms(i.returned)]));
     if (i.status == InvoiceStatus.paid) return [...parts, tr('مدفوعة بالكامل')].join(' · ');
-    if (i.paid > 0) parts.add(tr('دُفع {0} · المتبقي {1}', [moneyShort(i.paid), moneyShort(i.remaining)]));
+    if (i.paid > 0) parts.add(tr('دُفع {0} · المتبقي {1}', [_ms(i.paid), _ms(i.remaining)]));
     if (i.isOverdue) {
       parts.add(tr('متأخرة {0} يومًا', [DateTime.now().difference(i.dueDate).inDays]));
     } else {
@@ -325,7 +327,7 @@ class _QuoteList extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  Text(moneyShort(list[i].total), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  Text(_ms(list[i].total), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                   if (list[i].fromDaftra)
                     Padding(
                       padding: const EdgeInsetsDirectional.only(start: 8),
@@ -896,3 +898,7 @@ Widget _daftraNote(String text) => Container(
         ],
       ),
     );
+
+/// مبالغ الشاشة الرئيسية: مخفية افتراضيًا وتظهر بزر العين
+String _m(num v) => amountsMasked ? tr('{0} ر.س', [hiddenAmount]) : money(v);
+String _ms(num v) => amountsMasked ? hiddenAmount : moneyShort(v);
