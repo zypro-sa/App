@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'models.dart';
 import 'repository.dart';
+import 'plan_models.dart';
 import 'report_models.dart';
 import 'section_models.dart';
 import '../core/i18n.dart';
@@ -625,6 +626,122 @@ class SectionRepository {
       Map<String, dynamic>.from(
           await _db.rpc('backfill_history_requests', params: {'p_dry': dryRun, 'p_all': includeLater}) as Map);
 
+  // ---------------- جدول الأعمال ----------------
+  Future<WorkPlan> workPlan(DateTime from, DateTime to) async => WorkPlan(Map<String, dynamic>.from(
+      await _db.rpc('work_plan', params: {'p_from': _isoDate(from), 'p_to': _isoDate(to)}) as Map));
+
+  Future<void> savePlanItem({
+    String? id,
+    required String title,
+    String? notes,
+    required PlanStatus status,
+    required int progress,
+    DateTime? dueDate,
+    String? kpi,
+    num? kpiTarget,
+    required List<String> ownerIds,
+  }) async {
+    final data = {
+      'title': title,
+      'notes': (notes ?? '').trim().isEmpty ? null : notes!.trim(),
+      'status': status.db,
+      'progress': progress,
+      'due_date': dueDate == null ? null : _isoDate(dueDate),
+      'kpi': kpi,
+      'kpi_target': kpi == null ? null : kpiTarget,
+    };
+    final String itemId;
+    if (id == null) {
+      final r = await _db.from('plan_items').insert(data).select('id').single();
+      itemId = r['id'] as String;
+    } else {
+      await _db.from('plan_items').update(data).eq('id', id);
+      itemId = id;
+      await _db.from('plan_item_owners').delete().eq('item_id', id).not('user_id', 'in', '(${ownerIds.isEmpty ? '00000000-0000-0000-0000-000000000000' : ownerIds.join(',')})');
+    }
+    if (ownerIds.isNotEmpty) {
+      await _db.from('plan_item_owners').upsert(
+        [for (final u in ownerIds) {'item_id': itemId, 'user_id': u}],
+        onConflict: 'item_id,user_id',
+        ignoreDuplicates: true,
+      );
+    }
+  }
+
+  /// تحديث الحالة/التقدم (يكفي أن تكون مسؤولًا عن البند)
+  Future<void> updatePlanProgress(String id, {PlanStatus? status, int? progress}) => _db.from('plan_items').update({
+        if (status != null) 'status': status.db,
+        if (progress != null) 'progress': progress,
+      }).eq('id', id);
+
+  Future<void> deletePlanItem(String id) => _db.from('plan_items').update({'deleted_at': DateTime.now().toUtc().toIso8601String()}).eq('id', id);
+
+  Future<void> addTopic(String title, int? minutes) =>
+      _db.from('plan_topics').insert({'title': title, if (minutes != null) 'minutes': minutes});
+
+  Future<void> setTopicStatus(String id, String status) =>
+      _db.from('plan_topics').update({'status': status, 'updated_at': DateTime.now().toUtc().toIso8601String()}).eq('id', id);
+
+  Future<void> deleteTopic(String id) => _db.from('plan_topics').update({'deleted_at': DateTime.now().toUtc().toIso8601String()}).eq('id', id);
+
+  Future<void> saveInitiative({
+    String? id,
+    required String title,
+    String? description,
+    required String category,
+    required InitiativeStage stage,
+    required int progress,
+    DateTime? dueDate,
+    List<String>? ownerIds,
+  }) async {
+    final data = {
+      'title': title,
+      'description': (description ?? '').trim().isEmpty ? null : description!.trim(),
+      'category': category,
+      'stage': stage.db,
+      'progress': stage == InitiativeStage.done ? 100 : progress,
+      'due_date': dueDate == null ? null : _isoDate(dueDate),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    final String nid;
+    if (id == null) {
+      final r = await _db.from('initiatives').insert(data).select('id').single();
+      nid = r['id'] as String;
+    } else {
+      await _db.from('initiatives').update(data).eq('id', id);
+      nid = id;
+    }
+    if (ownerIds != null) {
+      if (id != null) {
+        await _db.from('initiative_owners').delete().eq('initiative_id', nid).not('user_id', 'in', '(${ownerIds.isEmpty ? '00000000-0000-0000-0000-000000000000' : ownerIds.join(',')})');
+      }
+      if (ownerIds.isNotEmpty) {
+        await _db.from('initiative_owners').upsert(
+          [for (final u in ownerIds) {'initiative_id': nid, 'user_id': u}],
+          onConflict: 'initiative_id,user_id',
+          ignoreDuplicates: true,
+        );
+      }
+    }
+  }
+
+  Future<void> moveInitiative(String id, InitiativeStage stage) => _db.from('initiatives').update({
+        'stage': stage.db,
+        if (stage == InitiativeStage.done) 'progress': 100,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', id);
+
+  Future<void> deleteInitiative(String id) =>
+      _db.from('initiatives').update({'deleted_at': DateTime.now().toUtc().toIso8601String()}).eq('id', id);
+
+  Future<void> toggleVote(String initiativeId, bool vote) async {
+    if (vote) {
+      await _db.from('initiative_votes').upsert({'initiative_id': initiativeId, 'user_id': _uid}, ignoreDuplicates: true);
+    } else {
+      await _db.from('initiative_votes').delete().eq('initiative_id', initiativeId).eq('user_id', _uid);
+    }
+  }
+
   // ---------------- التقارير المخصصة والمتقدمة ----------------
   Future<CustomResult> reportCustom(Map<String, dynamic> query) async {
     final res = await _db.rpc('report_custom', params: {'p': query});
@@ -727,6 +844,11 @@ final manageRowsProvider = FutureProvider.family<List<Map<String, dynamic>>, Str
 );
 final trashProvider = FutureProvider<List<TrashItem>>((ref) => ref.watch(sectionRepoProvider).trash());
 
+/// جدول الأعمال للفترة (من، إلى)
+final workPlanProvider = FutureProvider.family<WorkPlan, (DateTime, DateTime)>(
+  (ref, k) => ref.watch(sectionRepoProvider).workPlan(k.$1, k.$2),
+);
+
 /// تقرير مخصص — المفتاح هو CustomConfig.key
 final customReportProvider = FutureProvider.autoDispose.family<CustomResult, String>(
   (ref, key) => ref.watch(sectionRepoProvider).reportCustom(Map<String, dynamic>.from(jsonDecode(key) as Map)),
@@ -776,6 +898,7 @@ void refreshSections(WidgetRef ref) {
   ref.invalidate(quotesProvider);
   ref.invalidate(reportDashboardProvider);
   ref.invalidate(savedReportsProvider);
+  ref.invalidate(workPlanProvider);
   ref.invalidate(customReportProvider);
   ref.invalidate(workloadProvider);
   ref.invalidate(funnelProvider);

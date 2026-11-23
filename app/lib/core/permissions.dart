@@ -81,6 +81,8 @@ class Permissions {
   static const projectsManage = 'projects.manage';
   static const meetingsManage = 'meetings.manage';
   static const reportsView = 'reports.view';
+  static const planView = 'plan.view';
+  static const planEdit = 'plan.edit';
   static const teamView = 'team.view';
   static const financeManage = 'finance.manage';
   static const settingsLists = 'settings.lists';
@@ -156,6 +158,12 @@ class Permissions {
     PermModule('reports', 'التقارير', groupAr: 'الإدارة',
         noteAr: 'التقارير تُحسب تلقائيًا من البيانات، فليس فيها ما يُضاف أو يُحذف',
         items: [PermItem('view', 'عرض', 'تقارير الأداء وسجل النشاط')]),
+    PermModule('plan', 'جدول الأعمال', groupAr: 'الإدارة',
+        noteAr: 'أي عضو يقترح مواضيع للنقاش وأفكارًا للتطوير، والمسؤول عن البند يحدّث تقدمه',
+        items: [
+          PermItem('view', 'عرض', 'خطة عمل المكتب والقرارات والمشاريع'),
+          PermItem('edit', 'إدارة', 'إضافة بنود الخطة وتعديلها وحذفها وإدارة المشاريع'),
+        ]),
     PermModule('team', 'الفريق', groupAr: 'الإدارة',
         noteAr: 'لا أحد غير المالك يعدّل حسابه أو حساب المالك',
         items: [
@@ -184,7 +192,7 @@ class Permissions {
         ]),
   ];
 
-  static const _allRoles = {'requests.view_own', 'tasks.view_own', 'meetings.view_own', 'projects.view_own', 'clients.view'};
+  static const _allRoles = {'requests.view_own', 'tasks.view_own', 'meetings.view_own', 'projects.view_own', 'clients.view', 'plan.view'};
   static const _managerDefaults = {
     'requests.view', 'requests.add', 'requests.edit', 'requests.delete',
     'tasks.view', 'tasks.add', 'tasks.edit', 'tasks.delete',
@@ -192,7 +200,7 @@ class Permissions {
     'clients.add', 'clients.edit', 'clients.delete',
     'projects.view', 'projects.add', 'projects.edit', 'projects.delete',
     'followups.view', 'followups.add', 'followups.edit', 'followups.delete',
-    'reports.view', 'team.view',
+    'reports.view', 'team.view', 'plan.edit',
     'settings_lists.view', 'settings_lists.add', 'settings_lists.edit', 'settings_lists.delete',
     'statuses.view', 'settings_fields.view',
   };
