@@ -160,6 +160,19 @@ class Repository {
     return rows.map(TaskItem.fromMap).toList();
   }
 
+  /// مهامي المنجزة (الأحدث إنجازًا أولًا)
+  Future<List<TaskItem>> doneTasks({int limit = 300}) async {
+    final rows = await _db
+        .from('tasks')
+        .select('${TaskItem.select}, mine:task_assignees!inner(user_id)')
+        .isFilter('deleted_at', null)
+        .eq('mine.user_id', _uid)
+        .eq('status', 'done')
+        .order('completed_at', ascending: false, nullsFirst: false)
+        .limit(limit);
+    return rows.map(TaskItem.fromMap).toList();
+  }
+
   Future<void> setTaskDone(String id, bool done) => _db
       .from('tasks')
       .update({'status': done ? 'done' : 'todo'}).eq('id', id);
@@ -581,6 +594,8 @@ final requestCountsProvider = FutureProvider<Map<RequestStatus, int>>(
   (ref) => ref.watch(repositoryProvider).requestCounts(),
 );
 
+final doneTasksProvider = FutureProvider<List<TaskItem>>((ref) => ref.watch(repositoryProvider).doneTasks());
+
 final tasksProvider = FutureProvider.family<List<TaskItem>, bool>(
   (ref, assignedByMe) => ref.watch(repositoryProvider).tasks(assignedByMe: assignedByMe),
 );
@@ -611,8 +626,22 @@ void refreshAll(WidgetRef ref) {
   ref.invalidate(requestsProvider);
   ref.invalidate(requestCountsProvider);
   ref.invalidate(tasksProvider);
+  ref.invalidate(doneTasksProvider);
   ref.invalidate(meetingsProvider);
   ref.invalidate(followupsProvider);
   ref.invalidate(clientsProvider);
   ref.invalidate(clientDetailProvider);
+}
+
+/// مثل refreshAll لكن عبر الحاوية (يعمل حتى بعد اختفاء الويدجت، مثل زر «تراجع»)
+void refreshAllIn(ProviderContainer c) {
+  c.invalidate(homeSummaryProvider);
+  c.invalidate(requestsProvider);
+  c.invalidate(requestCountsProvider);
+  c.invalidate(tasksProvider);
+  c.invalidate(doneTasksProvider);
+  c.invalidate(meetingsProvider);
+  c.invalidate(followupsProvider);
+  c.invalidate(clientsProvider);
+  c.invalidate(clientDetailProvider);
 }

@@ -215,6 +215,7 @@ class TaskItem {
     required this.assigneeId,
     this.assignedById,
     this.dueAt,
+    this.completedAt,
     this.requestNumber,
     this.clientName,
     this.assigneeName,
@@ -229,6 +230,7 @@ class TaskItem {
   final String assigneeId;
   final String? assignedById;
   final DateTime? dueAt;
+  final DateTime? completedAt;
   final int? requestNumber;
   final String? clientName;
   final String? assigneeName;
@@ -252,7 +254,7 @@ class TaskItem {
   }
 
   static const select =
-      'id, title, status, priority, due_at, assignee_id, assigned_by_id, '
+      'id, title, status, priority, due_at, completed_at, assignee_id, assigned_by_id, '
       'source_decision_id, request:requests(number), client:clients(name), '
       'assignee:profiles!tasks_assignee_id_fkey(name), '
       'people:task_assignees(user_id, profile:profiles(name))';
@@ -265,6 +267,7 @@ class TaskItem {
         assigneeId: m['assignee_id'] as String,
         assignedById: m['assigned_by_id'] as String?,
         dueAt: _date(m['due_at']),
+        completedAt: _date(m['completed_at']),
         requestNumber: m['request'] is Map ? m['request']['number'] as int? : null,
         clientName: _nested(m['client'], 'name'),
         assigneeName: _nested(m['assignee'], 'name'),
