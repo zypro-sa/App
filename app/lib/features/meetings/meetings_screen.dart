@@ -13,6 +13,7 @@ import '../../core/i18n.dart';
 import '../../core/voice/command_parser.dart';
 import '../../widgets/voice_input.dart';
 import '../../core/permissions.dart';
+import '../../widgets/people_picker.dart';
 import 'edit_meeting_sheet.dart';
 
 /// ٤ · الاجتماعات
@@ -457,7 +458,7 @@ class _TasksFromMinutesSheet extends ConsumerStatefulWidget {
 
 class _TasksFromMinutesSheetState extends ConsumerState<_TasksFromMinutesSheet> {
   List<MinuteTask>? _items;
-  final Map<int, String?> _assignee = {};
+  final Map<int, List<String>> _assignee = {};
   final Map<int, DateTime?> _due = {};
   final Map<int, TextEditingController> _titles = {};
   bool _busy = false;
@@ -475,7 +476,8 @@ class _TasksFromMinutesSheetState extends ConsumerState<_TasksFromMinutesSheet> 
     final items = extractTasks(widget.minutes, team: [for (final p in team) NamedRef(p.id, p.name)]);
     _items = items;
     for (var i = 0; i < items.length; i++) {
-      _assignee[i] = items[i].parsed.assigneeId;
+      final a = items[i].parsed.assigneeId;
+      _assignee[i] = a == null ? <String>[] : [a];
       _due[i] = items[i].parsed.when;
       _titles[i] = TextEditingController(text: items[i].parsed.title);
     }
@@ -506,7 +508,7 @@ class _TasksFromMinutesSheetState extends ConsumerState<_TasksFromMinutesSheet> 
         await repo.createTaskFromMinutes(
           meetingId: widget.meeting.id,
           title: _titles[i]!.text.trim(),
-          assigneeId: _assignee[i],
+          assigneeIds: _assignee[i] ?? const [],
           dueAt: _due[i],
           clientId: widget.meeting.clientId,
         );
@@ -583,19 +585,23 @@ class _TasksFromMinutesSheetState extends ConsumerState<_TasksFromMinutesSheet> 
                               runSpacing: 6,
                               children: [
                                 if (canAssign)
-                                  PopupMenuButton<String>(
+                                  ActionChip(
                                     tooltip: tr('المسؤول'),
-                                    onSelected: (v) => setState(() => _assignee[i] = v),
-                                    itemBuilder: (_) => [
-                                      for (final p in team) PopupMenuItem(value: p.id, child: Text(p.name)),
-                                    ],
-                                    child: Chip(
-                                      avatar: const Icon(Icons.person_outline, size: 16),
-                                      label: Text(
-                                        team.where((p) => p.id == _assignee[i]).map((p) => p.name).firstOrNull ?? tr('أنا'),
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
+                                    avatar: Icon((_assignee[i]?.length ?? 0) > 1 ? Icons.group_outlined : Icons.person_outline, size: 16),
+                                    label: Text(
+                                      peopleNames(team, _assignee[i] ?? const [], empty: tr('أنا')),
+                                      style: const TextStyle(fontSize: 12),
                                     ),
+                                    onPressed: () async {
+                                      final v = await pickPeople(
+                                        context,
+                                        team: team,
+                                        selected: _assignee[i] ?? const [],
+                                        title: tr('إسناد المهمة'),
+                                        hint: tr('يمكنك اختيار أكثر من شخص للمهمة نفسها'),
+                                      );
+                                      if (v != null) setState(() => _assignee[i] = v);
+                                    },
                                   ),
                                 ActionChip(
                                   avatar: const Icon(Icons.event_outlined, size: 16),

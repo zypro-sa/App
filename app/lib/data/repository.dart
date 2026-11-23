@@ -47,9 +47,9 @@ class Repository {
           .lt('start_at', _iso(tomorrow)),
       _db
           .from('tasks')
-          .select('id')
+          .select('id, mine:task_assignees!inner(user_id)')
           .isFilter('deleted_at', null)
-          .eq('assignee_id', _uid)
+          .eq('mine.user_id', _uid)
           .neq('status', 'done')
           .inFilter('priority', ['high', 'urgent']),
       _db
@@ -68,9 +68,9 @@ class Repository {
           .limit(1),
       _db
           .from('tasks')
-          .select(TaskItem.select)
+          .select('${TaskItem.select}, mine:task_assignees!inner(user_id)')
           .isFilter('deleted_at', null)
-          .eq('assignee_id', _uid)
+          .eq('mine.user_id', _uid)
           .lt('due_at', _iso(tomorrow))
           .order('status', ascending: true)
           .order('due_at', ascending: true)
@@ -149,10 +149,10 @@ class Repository {
   // ---------------- المهام ----------------
   /// [assignedByMe]: false = مهامي، true = ما أسندته للفريق.
   Future<List<TaskItem>> tasks({required bool assignedByMe}) async {
-    var q = _db.from('tasks').select(TaskItem.select).isFilter('deleted_at', null);
-    q = assignedByMe
-        ? q.eq('assigned_by_id', _uid).neq('assignee_id', _uid)
-        : q.eq('assignee_id', _uid);
+    var q = assignedByMe
+        ? _db.from('tasks').select(TaskItem.select).isFilter('deleted_at', null).eq('assigned_by_id', _uid).neq('assignee_id', _uid)
+        // مهامي: كل مهمة أنا ضمن المسندة إليهم (وحدي أو مع غيري)
+        : _db.from('tasks').select('${TaskItem.select}, mine:task_assignees!inner(user_id)').isFilter('deleted_at', null).eq('mine.user_id', _uid);
     final weekAgo = _startOfToday().subtract(const Duration(days: 7));
     final rows = await q
         .or('status.neq.done,completed_at.gte.${_iso(weekAgo)}')
@@ -164,23 +164,63 @@ class Repository {
       .from('tasks')
       .update({'status': done ? 'done' : 'todo'}).eq('id', id);
 
+  /// [assigneeIds]: المسندة إليهم (فارغة = أنا). الأول هو المسؤول الأول.
   Future<void> createTask({
     required String title,
     required Priority priority,
     DateTime? dueAt,
-    String? assigneeId,
+    List<String> assigneeIds = const [],
     String? clientId,
     Map<String, dynamic> custom = const {},
-  }) =>
-      _db.from('tasks').insert({
-        'title': title,
-        'priority': priority.db,
-        'assignee_id': assigneeId ?? _uid,
-        'assigned_by_id': _uid,
-        if (dueAt != null) 'due_at': _iso(dueAt),
-        if (clientId != null) 'client_id': clientId,
-        if (custom.isNotEmpty) 'custom': custom,
-      });
+  }) async {
+    final people = assigneeIds.isEmpty ? [_uid] : assigneeIds;
+    final t = await _db
+        .from('tasks')
+        .insert({
+          'title': title,
+          'priority': priority.db,
+          'assignee_id': people.first,
+          'assigned_by_id': _uid,
+          if (dueAt != null) 'due_at': _iso(dueAt),
+          if (clientId != null) 'client_id': clientId,
+          if (custom.isNotEmpty) 'custom': custom,
+        })
+        .select('id')
+        .single();
+    await _addCoAssignees(t['id'] as String, people);
+  }
+
+  /// تغيير المسندة إليهم مهمة موجودة
+  Future<void> setTaskAssignees(TaskItem t, List<String> ids) async {
+    if (ids.isEmpty) return;
+    if (!ids.contains(t.assigneeId)) {
+      await _db.from('tasks').update({'assignee_id': ids.first}).eq('id', t.id);
+    }
+    final current = [for (final p in t.people) p.$1];
+    final remove = current.where((u) => !ids.contains(u) && u != (ids.contains(t.assigneeId) ? t.assigneeId : ids.first)).toList();
+    if (remove.isNotEmpty) {
+      await _db.from('task_assignees').delete().eq('task_id', t.id).inFilter('user_id', remove);
+    }
+    final add = ids.where((u) => !current.contains(u)).toList();
+    if (add.isNotEmpty) {
+      await _db.from('task_assignees').upsert(
+        [for (final u in add) {'task_id': t.id, 'user_id': u}],
+        onConflict: 'task_id,user_id',
+        ignoreDuplicates: true,
+      );
+    }
+  }
+
+  /// إضافة بقية المشاركين (الأول يُضاف تلقائيًا من قاعدة البيانات)
+  Future<void> _addCoAssignees(String taskId, List<String> people) async {
+    final rest = people.skip(1).toSet().where((u) => u != people.first).toList();
+    if (rest.isEmpty) return;
+    await _db.from('task_assignees').upsert(
+      [for (final u in rest) {'task_id': taskId, 'user_id': u}],
+      onConflict: 'task_id,user_id',
+      ignoreDuplicates: true,
+    );
+  }
 
   // ---------------- الاجتماعات ----------------
   Future<List<Meeting>> meetingsOn(DateTime day) async {
@@ -221,10 +261,12 @@ class Repository {
   Future<void> createTaskFromMinutes({
     required String meetingId,
     required String title,
-    String? assigneeId,
+    List<String> assigneeIds = const [],
     DateTime? dueAt,
     String? clientId,
   }) async {
+    final people = assigneeIds.isEmpty ? [_uid] : assigneeIds;
+    final assigneeId = people.first;
     String? decisionId;
     try {
       final d = await _db
@@ -232,7 +274,7 @@ class Repository {
           .insert({
             'meeting_id': meetingId,
             'text': title,
-            'owner_id': assigneeId ?? _uid,
+            'owner_id': assigneeId,
             if (dueAt != null) 'due_date': dueAt.toIso8601String().substring(0, 10),
           })
           .select('id')
@@ -246,7 +288,7 @@ class Repository {
         .insert({
           'title': title,
           'priority': 'medium',
-          'assignee_id': assigneeId ?? _uid,
+          'assignee_id': assigneeId,
           'assigned_by_id': _uid,
           if (dueAt != null) 'due_at': _iso(dueAt),
           if (clientId != null) 'client_id': clientId,
@@ -254,6 +296,7 @@ class Repository {
         })
         .select('id')
         .single();
+    await _addCoAssignees(t['id'] as String, people);
     if (decisionId != null) {
       await _db.from('decisions').update({'task_id': t['id']}).eq('id', decisionId);
     }
@@ -329,6 +372,7 @@ class Repository {
     required MeetingType type,
     String? clientId,
     String? location,
+    List<String> attendeeIds = const [],
     Map<String, dynamic> custom = const {},
   }) async {
     final row = await _db
@@ -344,11 +388,11 @@ class Repository {
         })
         .select('id')
         .single();
-    await _db.from('meeting_attendees').insert({
-      'meeting_id': row['id'],
-      'user_id': _uid,
-      'attendance': 'confirmed',
-    });
+    await _db.from('meeting_attendees').insert([
+      {'meeting_id': row['id'], 'user_id': _uid, 'attendance': 'confirmed'},
+      for (final u in attendeeIds.toSet())
+        if (u != _uid) {'meeting_id': row['id'], 'user_id': u, 'attendance': 'invited'},
+    ]);
   }
 
   // ---------------- المتابعات ----------------
