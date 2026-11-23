@@ -161,12 +161,11 @@ class Repository {
   }
 
   /// مهامي المنجزة (الأحدث إنجازًا أولًا)
-  Future<List<TaskItem>> doneTasks({int limit = 300}) async {
-    final rows = await _db
-        .from('tasks')
-        .select('${TaskItem.select}, mine:task_assignees!inner(user_id)')
-        .isFilter('deleted_at', null)
-        .eq('mine.user_id', _uid)
+  Future<List<TaskItem>> doneTasks({bool assignedByMe = false, int limit = 300}) async {
+    final base = assignedByMe
+        ? _db.from('tasks').select(TaskItem.select).isFilter('deleted_at', null).eq('assigned_by_id', _uid).neq('assignee_id', _uid)
+        : _db.from('tasks').select('${TaskItem.select}, mine:task_assignees!inner(user_id)').isFilter('deleted_at', null).eq('mine.user_id', _uid);
+    final rows = await base
         .eq('status', 'done')
         .order('completed_at', ascending: false, nullsFirst: false)
         .limit(limit);
@@ -594,7 +593,9 @@ final requestCountsProvider = FutureProvider<Map<RequestStatus, int>>(
   (ref) => ref.watch(repositoryProvider).requestCounts(),
 );
 
-final doneTasksProvider = FutureProvider<List<TaskItem>>((ref) => ref.watch(repositoryProvider).doneTasks());
+final doneTasksProvider = FutureProvider.family<List<TaskItem>, bool>(
+  (ref, assignedByMe) => ref.watch(repositoryProvider).doneTasks(assignedByMe: assignedByMe),
+);
 
 final tasksProvider = FutureProvider.family<List<TaskItem>, bool>(
   (ref, assignedByMe) => ref.watch(repositoryProvider).tasks(assignedByMe: assignedByMe),

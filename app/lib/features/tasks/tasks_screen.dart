@@ -19,24 +19,47 @@ class TasksScreen extends ConsumerStatefulWidget {
   ConsumerState<TasksScreen> createState() => _TasksScreenState();
 }
 
-enum _View { mine, done, team }
+class _TasksScreenState extends ConsumerState<TasksScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabs = TabController(length: 3, vsync: this);
+  bool _doneByMe = false; // في «المنجزة»: مهامي أم ما أسندته
 
-class _TasksScreenState extends ConsumerState<TasksScreen> {
-  _View _view = _View.mine;
-  bool get _assignedByMe => _view == _View.team;
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final tasks = ref.watch(tasksProvider(_assignedByMe));
-    final mine = ref.watch(tasksProvider(false)).valueOrNull;
-    final team = ref.watch(tasksProvider(true)).valueOrNull;
-    final done = ref.watch(doneTasksProvider);
+    final mineAsync = ref.watch(tasksProvider(false));
+    final teamAsync = ref.watch(tasksProvider(true));
+    final mine = mineAsync.valueOrNull;
+    final team = teamAsync.valueOrNull;
 
-    final list = tasks.valueOrNull ?? const <TaskItem>[];
     final today = dateOnly(DateTime.now());
-    final todayTasks = list.where((t) => t.dueAt != null && dateOnly(t.dueAt!) == today).toList();
+    final todayTasks = (mine ?? const <TaskItem>[]).where((t) => t.dueAt != null && dateOnly(t.dueAt!) == today).toList();
     final doneToday = todayTasks.where((t) => t.isDone).length;
     final percent = todayTasks.isEmpty ? 0 : (doneToday * 100 / todayTasks.length).round();
+
+    Widget page(List<Widget> children, Future<void> Function() onRefresh) => RefreshIndicator(
+          onRefresh: onRefresh,
+          child: ListView(padding: const EdgeInsets.fromLTRB(20, 14, 20, 100), children: children),
+        );
+
+    Widget openList(AsyncValue<List<TaskItem>> v, {required bool team}) => AsyncBody<List<TaskItem>>(
+          value: v,
+          onRetry: () => ref.invalidate(tasksProvider(team)),
+          builder: (list) {
+            // المفتوحة فقط — المنجزة لها تبويبها
+            final open = list.where((t) => !t.isDone).toList();
+            return open.isEmpty
+                ? EmptyState(team ? tr('لا توجد مهام مفتوحة لدى الفريق') : tr('لا توجد مهام مفتوحة — أحسنت!'),
+                    icon: Icons.check_circle_outline)
+                : _GroupedTasks(tasks: open, showAssignee: team);
+          },
+        );
+
+    final doneAsync = ref.watch(doneTasksProvider(_doneByMe));
 
     return Scaffold(
       appBar: AppBar(
@@ -44,30 +67,26 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(tr('المهام'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
+            Text(tr('المهام'), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
             Text(
               tr('أنجزت {0} من {1} اليوم', [doneToday, todayTasks.length]),
               style: TextStyle(fontSize: 13, color: AppColors.muted, fontWeight: FontWeight.w400),
             ),
           ],
         ),
+        bottom: TabBar(
+          controller: _tabs,
+          tabs: [
+            Tab(text: tr('مهامي {0}', [_openCount(mine)])),
+            Tab(text: tr('أسندتها للفريق {0}', [_openCount(team)])),
+            Tab(text: tr('المنجزة')),
+          ],
+        ),
       ),
-      body: RefreshIndicator(
-        onRefresh: () async => refreshAll(ref),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-          children: [
-            SegmentedButton<_View>(
-              showSelectedIcon: false,
-              segments: [
-                ButtonSegment(value: _View.mine, label: Text(tr('مهامي {0}', [_openCount(mine)]))),
-                ButtonSegment(value: _View.done, label: Text(tr('المنجزة'))),
-                ButtonSegment(value: _View.team, label: Text(tr('أسندتها {0}', [_openCount(team)]))),
-              ],
-              selected: {_view},
-              onSelectionChanged: (s) => setState(() => _view = s.first),
-            ),
-            const SizedBox(height: 14),
+      body: TabBarView(
+        controller: _tabs,
+        children: [
+          page([
             Row(
               children: [
                 Expanded(child: ProgressLine(percent, height: 8)),
@@ -76,31 +95,37 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
               ],
             ),
             const SizedBox(height: 14),
-            if (_view == _View.done)
-              AsyncBody<List<TaskItem>>(
-                value: done,
-                onRetry: () => ref.invalidate(doneTasksProvider),
-                builder: (list) => list.isEmpty
-                    ? EmptyState(tr('لم تُنجز أي مهمة بعد'), icon: Icons.task_alt)
-                    : _DoneTasks(tasks: list),
-              )
-            else
-              AsyncBody<List<TaskItem>>(
-                value: tasks,
-                onRetry: () => ref.invalidate(tasksProvider(_assignedByMe)),
-                builder: (list) {
-                  // مهامي: المفتوحة فقط — المنجزة تنتقل إلى «المنجزة»
-                  final shown = _view == _View.mine ? list.where((t) => !t.isDone).toList() : list;
-                  return shown.isEmpty
-                      ? EmptyState(
-                          _view == _View.mine ? tr('لا توجد مهام مفتوحة — أحسنت!') : tr('لا توجد مهام'),
-                          icon: Icons.check_circle_outline,
-                        )
-                      : _GroupedTasks(tasks: shown, showAssignee: _assignedByMe);
-                },
-              ),
-          ],
-        ),
+            openList(mineAsync, team: false),
+          ], () async => refreshAll(ref)),
+          page([openList(teamAsync, team: true)], () async => refreshAll(ref)),
+          page([
+            Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(
+                  label: Text(tr('مهامي')),
+                  selected: !_doneByMe,
+                  showCheckmark: false,
+                  onSelected: (_) => setState(() => _doneByMe = false),
+                ),
+                ChoiceChip(
+                  label: Text(tr('أسندتها للفريق')),
+                  selected: _doneByMe,
+                  showCheckmark: false,
+                  onSelected: (_) => setState(() => _doneByMe = true),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            AsyncBody<List<TaskItem>>(
+              value: doneAsync,
+              onRetry: () => ref.invalidate(doneTasksProvider(_doneByMe)),
+              builder: (list) => list.isEmpty
+                  ? EmptyState(tr('لم تُنجز أي مهمة بعد'), icon: Icons.task_alt)
+                  : _DoneTasks(tasks: list, showAssignee: _doneByMe),
+            ),
+          ], () async => refreshAll(ref)),
+        ],
       ),
     );
   }
@@ -154,8 +179,9 @@ class _GroupedTasks extends StatelessWidget {
 
 /// مهامي المنجزة مجمّعة حسب تاريخ الإنجاز
 class _DoneTasks extends StatelessWidget {
-  const _DoneTasks({required this.tasks});
+  const _DoneTasks({required this.tasks, this.showAssignee = false});
   final List<TaskItem> tasks;
+  final bool showAssignee;
 
   @override
   Widget build(BuildContext context) {
@@ -177,7 +203,7 @@ class _DoneTasks extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final e in groups.entries) _Group(e.key, e.value, color: AppColors.done, showAssignee: false),
+        for (final e in groups.entries) _Group(e.key, e.value, color: AppColors.done, showAssignee: showAssignee),
         if (tasks.length >= 300)
           Text(tr('تظهر آخر ٣٠٠ مهمة منجزة'), textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: AppColors.faint)),
       ],
