@@ -9,6 +9,7 @@ import '../../data/repository.dart';
 import '../../data/section_models.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/forms.dart' show customFieldRows, missingRequired, promptNumber, money;
+import '../../widgets/people_picker.dart';
 import '../../widgets/common.dart';
 import '../../core/i18n.dart';
 import '../../core/voice/command_parser.dart';
@@ -55,7 +56,8 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
   DateTime? _when;
   Priority _priority = Priority.medium;
   String? _clientId;
-  String? _assigneeId;
+  List<String> _assigneeIds = [];
+  List<String> _attendeeIds = [];
   int _duration = 30;
   MeetingType _meetingType = MeetingType.inPerson;
   FollowupDirection _direction = FollowupDirection.promised;
@@ -115,7 +117,13 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
         _when = (_type == QuickAddType.meeting && !p.hasTime) ? DateTime(w.year, w.month, w.day, 10) : w;
       }
       if (p.clientId != null) _clientId = p.clientId;
-      if (p.assigneeId != null && (me?.can(Permissions.tasksAssign) ?? false)) _assigneeId = p.assigneeId;
+      if (p.assigneeId != null && (me?.can(Permissions.tasksAssign) ?? false)) {
+        if (_type == QuickAddType.meeting) {
+          if (!_attendeeIds.contains(p.assigneeId)) _attendeeIds = [..._attendeeIds, p.assigneeId!];
+        } else {
+          _assigneeIds = [p.assigneeId!];
+        }
+      }
       if (p.priority == 'urgent') _priority = Priority.urgent;
       if (p.priority == 'high') _priority = Priority.high;
       if (_type == QuickAddType.followup) {
@@ -230,7 +238,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             title: title,
             priority: _priority,
             dueAt: _when,
-            assigneeId: _assigneeId,
+            assigneeIds: _assigneeIds,
             clientId: _clientId,
             custom: Map.of(_custom),
           );
@@ -253,6 +261,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             type: _meetingType,
             clientId: _clientId,
             location: _location.text.trim(),
+            attendeeIds: _attendeeIds,
             custom: Map.of(_custom),
           );
         case QuickAddType.followup:
@@ -424,12 +433,19 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                     ],
                     if (_type == QuickAddType.task && canAssign && team.length > 1 && cfg.isVisible('assignee_id')) ...[
                       Divider(height: 1, color: AppColors.divider),
-                      _DropdownRow<String>(
+                      _FieldRow(
                         label: tr('المسؤول'),
-                        value: _assigneeId,
-                        emptyLabel: tr('أنا'),
-                        items: {for (final p in team) p.id: p.name},
-                        onChanged: (v) => setState(() => _assigneeId = v),
+                        value: peopleNames(team, _assigneeIds, empty: tr('أنا')),
+                        onTap: () async {
+                          final v = await pickPeople(
+                            context,
+                            team: team,
+                            selected: _assigneeIds,
+                            title: tr('إسناد المهمة'),
+                            hint: tr('يمكنك اختيار أكثر من شخص للمهمة نفسها'),
+                          );
+                          if (v != null) setState(() => _assigneeIds = v);
+                        },
                       ),
                     ],
                     if (_type == QuickAddType.meeting && cfg.isVisible('location')) ...[
@@ -447,6 +463,23 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                             contentPadding: EdgeInsets.zero,
                           ),
                         ),
+                      ),
+                    ],
+                    if (_type == QuickAddType.meeting && team.length > 1) ...[
+                      Divider(height: 1, color: AppColors.divider),
+                      _FieldRow(
+                        label: tr('المشاركون'),
+                        value: peopleNames(team, _attendeeIds, empty: tr('أنا فقط')),
+                        onTap: () async {
+                          final v = await pickPeople(
+                            context,
+                            team: team,
+                            selected: _attendeeIds,
+                            title: tr('المشاركون من الفريق'),
+                            hint: tr('أنت مشارك تلقائيًا'),
+                          );
+                          if (v != null) setState(() => _attendeeIds = v);
+                        },
                       ),
                     ],
                     if (_type == QuickAddType.meeting) ...[

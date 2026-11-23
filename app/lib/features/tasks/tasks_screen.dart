@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/formatters.dart';
+import '../../core/permissions.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../widgets/common.dart';
+import '../../widgets/forms.dart' show runAction;
+import '../../widgets/people_picker.dart';
 import '../../core/i18n.dart';
 
 /// ٣ · المهام
@@ -178,12 +181,17 @@ class TaskRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = task;
+    final me = ref.watch(profileProvider).valueOrNull;
+    final canReassign = !t.isDone &&
+        (me?.can(Permissions.tasksAssign) ?? false) &&
+        (t.assignedById == me?.id || (me?.can(Permissions.tasksEdit) ?? false));
     final tags = <Widget>[
       if (!t.isDone && t.priority == Priority.urgent) Pill.urgent(tr('عاجل')),
       if (t.requestNumber != null) _Tag('#${t.requestNumber}'),
       if (t.clientName != null) _Tag(t.clientName!),
       if (t.fromMeeting) Pill.info(tr('من اجتماع')),
-      if (showAssignee && t.assigneeName != null) _Tag(t.assigneeName!),
+      if (showAssignee && t.peopleLabel.isNotEmpty) _Tag(t.peopleLabel)
+      else if (t.isShared) Pill.info(tr('مشتركة · {0}', [t.people.length])),
       if (t.dueAt != null)
         Text(
           t.isOverdue ? relativeDay(t.dueAt!) : _dueLabel(t.dueAt!),
@@ -231,7 +239,29 @@ class TaskRow extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          if (canReassign)
+            IconButton(
+              tooltip: tr('المسؤولون'),
+              visualDensity: VisualDensity.compact,
+              icon: Icon(t.isShared ? Icons.group_outlined : Icons.person_add_alt, size: 20, color: AppColors.muted),
+              onPressed: () async {
+                final team = ref.read(teamProvider).valueOrNull ?? const <Profile>[];
+                final current = [t.assigneeId, for (final p in t.people) if (p.$1 != t.assigneeId) p.$1];
+                final v = await pickPeople(
+                  context,
+                  team: team,
+                  selected: current,
+                  title: tr('إسناد المهمة'),
+                  hint: tr('يمكنك اختيار أكثر من شخص للمهمة نفسها'),
+                );
+                if (v == null || v.isEmpty || !context.mounted) return;
+                if (await runAction(context, () => ref.read(repositoryProvider).setTaskAssignees(t, v), success: tr('حُدّث المسؤولون'))) {
+                  refreshAll(ref);
+                }
+              },
+            )
+          else
+            const SizedBox(width: 10),
         ],
       ),
     );

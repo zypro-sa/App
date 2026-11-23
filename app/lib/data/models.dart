@@ -219,6 +219,7 @@ class TaskItem {
     this.clientName,
     this.assigneeName,
     this.fromMeeting = false,
+    this.people = const [],
   });
 
   final String id;
@@ -233,6 +234,15 @@ class TaskItem {
   final String? assigneeName;
   final bool fromMeeting;
 
+  /// كل المسندة إليهم المهمة: (المعرّف، الاسم)
+  final List<(String, String)> people;
+
+  /// المهمة مشتركة بين أكثر من شخص؟
+  bool get isShared => people.length > 1;
+
+  /// أسماء المشاركين للعرض
+  String get peopleLabel => people.isEmpty ? (assigneeName ?? '') : people.map((p) => p.$2).join('، ');
+
   bool get isDone => status == TaskStatus.done;
 
   bool get isOverdue {
@@ -244,7 +254,8 @@ class TaskItem {
   static const select =
       'id, title, status, priority, due_at, assignee_id, assigned_by_id, '
       'source_decision_id, request:requests(number), client:clients(name), '
-      'assignee:profiles!tasks_assignee_id_fkey(name)';
+      'assignee:profiles!tasks_assignee_id_fkey(name), '
+      'people:task_assignees(user_id, profile:profiles(name))';
 
   factory TaskItem.fromMap(Map<String, dynamic> m) => TaskItem(
         id: m['id'] as String,
@@ -258,6 +269,10 @@ class TaskItem {
         clientName: _nested(m['client'], 'name'),
         assigneeName: _nested(m['assignee'], 'name'),
         fromMeeting: m['source_decision_id'] != null,
+        people: [
+          for (final a in (m['people'] as List? ?? const []))
+            if (a is Map && a['user_id'] != null) (a['user_id'] as String, _nested(a['profile'], 'name') ?? ''),
+        ],
       );
 }
 
