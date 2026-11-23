@@ -16,6 +16,7 @@ import '../features/notifications/notification_settings_screen.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/projects/project_detail_screen.dart';
 import '../features/projects/projects_screen.dart';
+import '../features/reports/initiatives_screen.dart';
 import '../features/reports/report_builder_screen.dart';
 import '../features/reports/report_list_screen.dart';
 import '../features/reports/reports_screen.dart';
@@ -139,8 +140,9 @@ final appRouter = GoRouter(
               GoRoute(path: 'notes', builder: (_, __) => const NotesScreen()),
               GoRoute(
                 path: 'reports',
-                builder: (_, __) => const ReportsScreen(),
+                builder: (_, s) => ReportsScreen(initialTab: s.uri.queryParameters['tab']),
                 routes: [
+                  GoRoute(path: 'initiatives', builder: (_, __) => const InitiativesScreen()),
                   GoRoute(path: 'builder', builder: (_, s) => ReportBuilderScreen(reportId: s.uri.queryParameters['id'])),
                   GoRoute(
                     path: 'list',

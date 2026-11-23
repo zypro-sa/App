@@ -14,6 +14,7 @@ import '../../data/section_repository.dart';
 import '../../widgets/charts.dart';
 import '../../widgets/common.dart';
 import '../../widgets/forms.dart';
+import 'plan_tab.dart';
 import 'report_advanced.dart';
 import 'report_common.dart';
 import 'report_export.dart';
@@ -24,7 +25,10 @@ enum _Mode { dashboard, numbers, detail }
 
 /// ١٣ · التقارير — لوحة، أرقام، وتفصيل، مع تقرير شخصي لكل عضو.
 class ReportsScreen extends ConsumerStatefulWidget {
-  const ReportsScreen({super.key});
+  const ReportsScreen({super.key, this.initialTab});
+
+  /// مثل «plan» لفتح «جدول الأعمال» مباشرة
+  final String? initialTab;
 
   @override
   ConsumerState<ReportsScreen> createState() => _ReportsScreenState();
@@ -76,8 +80,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final d = data.valueOrNull;
 
     final whole = member == null;
+    final canPlan = me.can(Permissions.planView) || me.can(Permissions.planEdit);
     final tabs = <(String, Widget Function(ReportData))>[
       (tr('نظرة عامة'), (r) => _OverviewTab(r, filter)),
+      if (canPlan) (tr('جدول الأعمال'), (_) => const PlanTab()),
       (tr('تقارير مخصصة'), (_) => const CustomReportsTab()),
       (tr('الطلبات'), (r) => _RequestsTab(r, filter)),
       if (whole) (tr('الفريق'), (r) => _TeamTab(r, filter, onMember: (id) => setState(() => _member = id))),
@@ -99,6 +105,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     return AmountsScope(child: DefaultTabController(
       key: ValueKey('${tabs.length}-$whole'),
       length: tabs.length,
+      initialIndex: widget.initialTab == 'plan' && canPlan ? 1 : 0,
       child: Scaffold(
         appBar: sectionAppBar(
           !canAll || _mine ? tr('تقريري') : tr('التقارير'),

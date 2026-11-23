@@ -9,11 +9,13 @@ import '../../core/formatters.dart';
 import '../../core/i18n.dart';
 import '../../core/permissions.dart';
 import '../../core/web/web_tools.dart';
+import '../../data/plan_models.dart';
 import '../../data/report_models.dart';
 import '../../data/repository.dart';
 import '../../data/section_repository.dart';
 import '../../widgets/charts.dart';
 import 'custom_report.dart';
+import 'plan_tab.dart';
 import 'report_common.dart';
 
 /// ألوان شاشة المكتب (داكنة دائمًا)
@@ -168,6 +170,7 @@ class _TvScreenState extends ConsumerState<TvScreen> {
         ref.invalidate(reportDashboardProvider(_key));
         ref.invalidate(reportDashboardProvider(_monthKey));
         ref.invalidate(savedReportsProvider);
+        ref.invalidate(workPlanProvider);
         ref.invalidate(customReportProvider);
       }
     });
@@ -205,6 +208,8 @@ class _TvScreenState extends ConsumerState<TvScreen> {
         : const <SavedReport>[];
     final all = <(String, String, Widget Function(ReportData, double))>[
       ('overview', tr('نظرة عامة · آخر ٣٠ يومًا'), (d, s) => _OverviewSlide(d, s)),
+      if (me != null && (me.can(Permissions.planView) || me.can(Permissions.planEdit)))
+        ('plan', tr('جدول الأعمال · خطة عمل المكتب'), (_, s) => _PlanSlide(s)),
       ('requests', tr('الطلبات · الحالات والتعطل'), (d, s) => _RequestsSlide(d, s)),
       ('team', tr('الفريق · العمل المفتوح والالتزام'), (d, s) => _TeamSlide(d, s)),
       if (d?.finance != null) ('finance', tr('المالية · التحصيل والمستحقات'), (d, s) => _FinanceSlide(d, s)),
@@ -1180,6 +1185,254 @@ class _CustomSlide extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ---------------- جدول الأعمال ----------------
+Color _planTv(PlanStatus st) => switch (st) {
+      PlanStatus.done => _Tv.accent,
+      PlanStatus.on => _Tv.blue,
+      PlanStatus.risk => _Tv.coral,
+      PlanStatus.todo => _Tv.muted,
+    };
+
+Color _decTv(DecisionState st) => switch (st) {
+      DecisionState.done => _Tv.accent,
+      DecisionState.on => _Tv.blue,
+      DecisionState.late => _Tv.coral,
+    };
+
+Widget _tvPill(String t, Color c, double s) => Container(
+      padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 4 * s),
+      decoration: BoxDecoration(color: c.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(99)),
+      child: Text(t, style: TextStyle(fontSize: 14 * s, fontWeight: FontWeight.w700, color: c)),
+    );
+
+class _PlanSlide extends ConsumerWidget {
+  const _PlanSlide(this.s);
+  final double s;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final plan = ref.watch(workPlanProvider(planRange(PlanPeriod.month))).valueOrNull;
+    if (plan == null) return const Center(child: CircularProgressIndicator(color: _Tv.accent));
+    final items = plan.items;
+    final dec = plan.decisions;
+    final topics = plan.topics;
+    final inits = plan.initiatives.where((n) => n.stage == InitiativeStage.active || n.stage == InitiativeStage.waiting).take(3).toList();
+    final ideas = plan.initiatives.where((n) => n.stage == InitiativeStage.idea).length;
+    final doneN = items.where((i) => i.status == PlanStatus.done).length;
+    final riskN = items.where((i) => i.status == PlanStatus.risk || i.overdue).length;
+    final decDone = dec.where((d) => d.state == DecisionState.done).length;
+    final gap = 16 * s;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _kpiRow(s, [
+          _BigKpi(s: s, label: tr('بنود الخطة'), value: fmtNum(items.length)),
+          _BigKpi(s: s, label: tr('إنجاز الخطة'), value: fmtPct(plan.planProgress), color: _Tv.accent),
+          _BigKpi(s: s, label: tr('منجز / متعثر'), value: '$doneN / $riskN', color: riskN > 0 ? _Tv.coral : _Tv.accent),
+          _BigKpi(
+            s: s,
+            label: tr('القرارات المنفذة'),
+            value: dec.isEmpty ? '—' : '$decDone / ${dec.length}',
+            color: _Tv.amber,
+          ),
+        ]),
+        SizedBox(height: gap),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                flex: 3,
+                child: _Box(
+                  s: s,
+                  title: tr('خطة العمل'),
+                  child: items.isEmpty
+                      ? _empty(s)
+                      : Column(
+                          children: [
+                            for (final i in items.take(6))
+                              Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8 * s),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(i.title,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 20 * s,
+                                                fontWeight: FontWeight.w600,
+                                                color: i.status == PlanStatus.done ? _Tv.muted : _Tv.text,
+                                                decoration: i.status == PlanStatus.done ? TextDecoration.lineThrough : null,
+                                              )),
+                                          Text(
+                                            [
+                                              if (i.owners.isNotEmpty) i.owners.map((o) => o.name).join(tr('، ')),
+                                              if (i.dueDate != null) formatShortDate(i.dueDate!),
+                                              if (planKpiText(i) != null) '📊 ${planKpiText(i)}',
+                                            ].join(' · '),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(fontSize: 15 * s, color: i.overdue ? _Tv.coral : _Tv.muted),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    SizedBox(width: 12 * s),
+                                    _tvPill(tr(i.status.label), _planTv(i.status), s),
+                                    SizedBox(width: 12 * s),
+                                    SizedBox(
+                                      width: 180 * s,
+                                      child: ProgressBar(
+                                        ratio: i.progress / 100,
+                                        color: i.status == PlanStatus.risk ? _Tv.coral : _Tv.accent,
+                                        height: 12 * s,
+                                        trackColor: _Tv.line,
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 60 * s,
+                                      child: Text(fmtPct(i.progress),
+                                          textAlign: TextAlign.end, style: TextStyle(fontSize: 18 * s, fontWeight: FontWeight.w700)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                ),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      flex: 6,
+                      child: _Box(
+                        s: s,
+                        title: tr('متابعة القرارات والتكليفات'),
+                        child: dec.isEmpty
+                            ? _empty(s)
+                            : Column(
+                                children: [
+                                  for (final d in dec.take(4))
+                                    Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 6 * s),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                              width: 12 * s, height: 12 * s, decoration: BoxDecoration(color: _decTv(d.state), shape: BoxShape.circle)),
+                                          SizedBox(width: 12 * s),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(d.text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 18 * s, fontWeight: FontWeight.w600)),
+                                                Text([if (d.meeting != null) d.meeting!, if (d.owner != null) d.owner!].join(' · '),
+                                                    maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14 * s, color: _Tv.muted)),
+                                              ],
+                                            ),
+                                          ),
+                                          _tvPill(tr(d.state.label), _decTv(d.state), s),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                      ),
+                    ),
+                    SizedBox(height: gap),
+                    Expanded(
+                      flex: 5,
+                      child: _Box(
+                        s: s,
+                        title: tr('للنقاش اليوم'),
+                        child: topics.isEmpty
+                            ? _empty(s)
+                            : Column(
+                                children: [
+                                  for (var k = 0; k < topics.length && k < 4; k++)
+                                    _Line(
+                                      s: s,
+                                      title: '${k + 1}. ${topics[k].title}',
+                                      subtitle: topics[k].proposer == null ? null : tr('يطرحه {0}', [topics[k].proposer]),
+                                      value: topics[k].minutes == null ? null : tr('{0} د', [topics[k].minutes]),
+                                      valueColor: _Tv.muted,
+                                    ),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: gap),
+        SizedBox(
+          height: 120 * s,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final n in inits) ...[
+                Expanded(
+                  child: Container(
+                    padding: EdgeInsets.all(16 * s),
+                    decoration: BoxDecoration(color: _Tv.card, borderRadius: BorderRadius.circular(18 * s), border: Border.all(color: _Tv.line)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: Text(n.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 18 * s, fontWeight: FontWeight.w700))),
+                            Text(tr(n.stage.label), style: TextStyle(fontSize: 13 * s, color: _Tv.muted)),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            Expanded(child: ProgressBar(ratio: n.progress / 100, color: _Tv.blue, height: 10 * s, trackColor: _Tv.line)),
+                            SizedBox(width: 10 * s),
+                            Text(fmtPct(n.progress), style: TextStyle(fontSize: 16 * s, fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(width: gap),
+              ],
+              Container(
+                width: 240 * s,
+                padding: EdgeInsets.all(16 * s),
+                decoration: BoxDecoration(
+                  color: _Tv.amber.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(18 * s),
+                  border: Border.all(color: _Tv.amber.withValues(alpha: 0.4)),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(tr('💡 {0} أفكار', [ideas]), style: TextStyle(fontSize: 20 * s, fontWeight: FontWeight.w700, color: _Tv.amber)),
+                    Text(tr('بانتظار المناقشة'), style: TextStyle(fontSize: 15 * s, color: _Tv.amber)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
