@@ -153,6 +153,8 @@ class _DaftraScreenState extends ConsumerState<DaftraScreen> {
               _resultCard(_result!),
             ],
             const SizedBox(height: 18),
+            const _HistoryRequestsCard(),
+            const SizedBox(height: 18),
             _howItWorks(),
           ],
         ),
@@ -294,6 +296,148 @@ class _DaftraScreenState extends ConsumerState<DaftraScreen> {
         Text(tr('• الفواتير القادمة من دفترة للعرض فقط، ويبقى بإمكانك ربطها بطلب وإضافة وصف لها.'), style: s),
         Text(tr('• أي تعديل على فاتورة أو دفعة يتم في دفترة، ويظهر هنا في المزامنة التالية.'), style: s),
       ],
+    );
+  }
+}
+
+/// الطلبات السابقة: طلب منجز لكل فاتورة قديمة غير مرتبطة بطلب
+class _HistoryRequestsCard extends ConsumerStatefulWidget {
+  const _HistoryRequestsCard();
+
+  @override
+  ConsumerState<_HistoryRequestsCard> createState() => _HistoryRequestsCardState();
+}
+
+class _HistoryRequestsCardState extends ConsumerState<_HistoryRequestsCard> {
+  bool _busy = false;
+  Map<String, dynamic>? _preview;
+  bool _includeLater = false;
+
+  Future<void> _load({bool? includeLater}) async {
+    setState(() => _busy = true);
+    try {
+      final r = await ref
+          .read(sectionRepoProvider)
+          .backfillHistoryRequests(dryRun: true, includeLater: includeLater ?? _includeLater);
+      if (mounted) setState(() => _preview = r);
+    } catch (e) {
+      if (mounted) showSnack(context, tr('تعذّرت المعاينة: {0}', ['$e']));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _apply() async {
+    final n = (_preview?['requests'] as num?)?.toInt() ?? 0;
+    final ok = await confirmAction(
+      context,
+      title: tr('إنشاء {0} طلبًا منجزًا؟', [n]),
+      message: tr('يُنشأ لكل فاتورة طلب مغلق بتاريخها وقيمتها ويُربط بها. يمكنك لاحقًا تعديل عنوانه ونوع خدمته أو حذفه.'),
+      confirmLabel: tr('إنشاء'),
+    );
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final r = await ref.read(sectionRepoProvider).backfillHistoryRequests(dryRun: false, includeLater: _includeLater);
+      if (!mounted) return;
+      refreshSections(ref);
+      refreshAll(ref);
+      showSnack(context, tr('أُنشئ {0} طلبًا من الفواتير السابقة', [r['requests']]));
+      await _load();
+    } catch (e) {
+      if (mounted) showSnack(context, tr('تعذّر الإنشاء: {0}', ['$e']));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = _preview;
+    final n = (p?['requests'] as num?)?.toInt() ?? 0;
+    final later = (p?['later_unlinked'] as num?)?.toInt() ?? 0;
+    final cutoff = DateTime.tryParse('${p?['cutoff'] ?? ''}');
+    final sample = [for (final x in (p?['sample'] as List? ?? const [])) if (x is Map) x];
+    return CardBox(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.history_edu_outlined, color: AppColors.accentText),
+              const SizedBox(width: 8),
+              Expanded(child: Text(tr('الطلبات السابقة'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            tr('لكل فاتورة من دفترة غير مرتبطة بطلب، يُنشأ طلب منجز بتاريخها وقيمتها، فتكتمل التقارير وملفات العملاء. لا تدخل هذه الطلبات في متوسط زمن الإنجاز.'),
+            style: TextStyle(fontSize: 13, color: AppColors.muted, height: 1.6),
+          ),
+          const SizedBox(height: 12),
+          if (p == null)
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _load,
+              icon: const Icon(Icons.search, size: 18),
+              label: Text(tr('معاينة')),
+            )
+          else ...[
+            Text(
+              n == 0
+                  ? tr('لا توجد فواتير سابقة بلا طلب')
+                  : tr('سيُنشأ {0} طلبًا منجزًا · {1}', [n, money((p['total'] as num?) ?? 0)]),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+            if (cutoff != null && !_includeLater)
+              Text(tr('للفواتير قبل {0} (تاريخ أول طلب في التطبيق)', [formatDay(cutoff)]),
+                  style: TextStyle(fontSize: 12, color: AppColors.muted)),
+            if (sample.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              for (final x in sample)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text('${x['number']} · ${x['client'] ?? ''}',
+                            maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                      ),
+                      Text(money((x['total'] as num?) ?? 0), style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                    ],
+                  ),
+                ),
+              if (n > sample.length)
+                Text(tr('و{0} أخرى', [n - sample.length]), style: TextStyle(fontSize: 12, color: AppColors.muted)),
+            ],
+            if (later > 0 || _includeLater) ...[
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _includeLater,
+                onChanged: _busy
+                    ? null
+                    : (v) {
+                        setState(() => _includeLater = v ?? false);
+                        _load(includeLater: v ?? false);
+                      },
+                title: Text(tr('تضمين الفواتير الأحدث أيضًا'), style: const TextStyle(fontSize: 14)),
+                subtitle: Text(
+                  tr('{0} فاتورة بعد بدء استخدام التطبيق بلا طلب — الأفضل ربطها بطلباتها من شاشة الفاتورة', [later]),
+                  style: TextStyle(fontSize: 12, color: AppColors.muted),
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: _busy || n == 0 ? null : _apply,
+              icon: _busy
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.playlist_add_check, size: 18),
+              label: Text(tr('إنشاء الطلبات')),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

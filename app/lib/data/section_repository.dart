@@ -620,6 +620,11 @@ class SectionRepository {
         onConflict: 'month,metric',
       );
 
+  /// إنشاء طلبات منجزة للفواتير السابقة غير المرتبطة بطلب
+  Future<Map<String, dynamic>> backfillHistoryRequests({required bool dryRun, bool includeLater = false}) async =>
+      Map<String, dynamic>.from(
+          await _db.rpc('backfill_history_requests', params: {'p_dry': dryRun, 'p_all': includeLater}) as Map);
+
   // ---------------- التقارير المخصصة والمتقدمة ----------------
   Future<CustomResult> reportCustom(Map<String, dynamic> query) async {
     final res = await _db.rpc('report_custom', params: {'p': query});
