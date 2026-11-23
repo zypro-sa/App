@@ -1294,4 +1294,7 @@ const Map<String, String> enStrings = {
   'نُقلت إلى «المنجزة»': 'Moved to "Done"',
   'أُعيدت إلى «مهامي»': 'Moved back to "My tasks"',
   'تراجع': 'Undo',
+  'لا توجد مهام مفتوحة لدى الفريق': 'No open team tasks',
+  'مهامي': 'My tasks',
+  'أسندتها للفريق': 'Assigned to team',
 };
