@@ -1285,4 +1285,13 @@ const Map<String, String> enStrings = {
   'تضمين الفواتير الأحدث أيضًا': 'Include newer invoices too',
   '{0} فاتورة بعد بدء استخدام التطبيق بلا طلب — الأفضل ربطها بطلباتها من شاشة الفاتورة': '{0} invoices after you started using the app have no request — better to link them to their requests from the invoice screen',
   'إنشاء الطلبات': 'Create requests',
+  'المنجزة': 'Done',
+  'أسندتها {0}': 'Assigned {0}',
+  'لم تُنجز أي مهمة بعد': 'No completed tasks yet',
+  'لا توجد مهام مفتوحة — أحسنت!': 'No open tasks — well done!',
+  'سابقًا': 'Earlier',
+  'تظهر آخر ٣٠٠ مهمة منجزة': 'Showing the last 300 completed tasks',
+  'نُقلت إلى «المنجزة»': 'Moved to "Done"',
+  'أُعيدت إلى «مهامي»': 'Moved back to "My tasks"',
+  'تراجع': 'Undo',
 };
