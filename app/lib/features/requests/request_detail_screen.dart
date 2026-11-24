@@ -109,6 +109,8 @@ class _Body extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final r = d.item;
     final cfg = ref.watch(fieldConfigProvider(ConfigEntity.request)).valueOrNull ?? FieldConfig(const []);
+    final canAssign = ref.watch(profileProvider).valueOrNull?.can(Permissions.requestsEdit) ?? false;
+    final team = canAssign ? (ref.watch(teamProvider).valueOrNull ?? const <Profile>[]) : const <Profile>[];
     final sl = labels[r.status.db];
     final progressColor = r.isOverdue ? AppColors.danger : AppColors.accent;
 
@@ -209,8 +211,29 @@ class _Body extends ConsumerWidget {
                       }
                     },
             ),
-          if (cfg.isVisible('priority')) FormRow(label: cfg.labelOf('priority', tr('الأولوية')), value: r.priority.label),
-          FormRow(label: tr('المسؤول'), value: r.assigneeName ?? '—'),
+          if (cfg.isVisible('priority'))
+            canEdit
+                ? FormDropdown<Priority>(
+                    label: cfg.labelOf('priority', tr('الأولوية')),
+                    value: r.priority,
+                    allowEmpty: false,
+                    items: {for (final p in Priority.values) p: p.label},
+                    onChanged: (v) {
+                      if (v != null && v != r.priority) update({'priority': v.db});
+                    },
+                  )
+                : FormRow(label: cfg.labelOf('priority', tr('الأولوية')), value: r.priority.label),
+          canAssign
+              ? FormDropdown<String>(
+                  label: tr('المسؤول'),
+                  value: team.any((p) => p.id == d.assigneeId) ? d.assigneeId : null,
+                  emptyLabel: tr('غير مسند'),
+                  items: {for (final p in team) p.id: p.name},
+                  onChanged: (v) {
+                    if (v != d.assigneeId) update({'assignee_id': v}, success: tr('تم تغيير المسؤول'));
+                  },
+                )
+              : FormRow(label: tr('المسؤول'), value: r.assigneeName ?? '—'),
           if (d.receivedAt != null) FormRow(label: tr('تاريخ الاستلام'), value: formatShortDate(d.receivedAt!)),
           for (final f in cfg.customVisible)
             if (d.custom[f.key] != null)

@@ -1373,4 +1373,6 @@ const Map<String, String> enStrings = {
   'إضافة بنود الخطة وتعديلها وحذفها وإدارة المشاريع': 'Add, edit and delete plan items and manage projects',
   'أي عضو يقترح مواضيع للنقاش وأفكارًا للتطوير، والمسؤول عن البند يحدّث تقدمه': 'Any member can suggest topics and ideas; item owners update their progress',
   'إدارة': 'Manage',
+  'غير مسند': 'Unassigned',
+  'تم تغيير المسؤول': 'Assignee changed',
 };
