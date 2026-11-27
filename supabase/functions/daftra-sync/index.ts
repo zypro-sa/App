@@ -110,7 +110,7 @@ async function sync(db: SupabaseClient, dry: boolean) {
     invoices: { created: 0, updated: 0, removed: 0, skipped_drafts: 0, skipped_fully_returned: 0, skipped_no_client: 0 },
     payments: { added: 0, updated: 0, removed: 0, mismatched: [] as string[] },
     returns: { set: 0, removed: 0 },
-    quotes: { created: 0, updated: 0, removed: 0 },
+    quotes: { created: 0, updated: 0, removed: 0, linked: 0 },
     fields: {} as Record<string, string[]>,
     warnings: [] as string[],
     details: [] as string[],
@@ -371,6 +371,7 @@ async function sync(db: SupabaseClient, dry: boolean) {
   if (dEstimates.length > 0) {
     const lQuotes = await all(db, "quotes", "id, number, daftra_id, deleted_at");
     const seenQ = new Set<string>();
+    const links: { invoice: string; quote: string; label: string }[] = [];
     const monthAgo = addDays(new Date().toISOString().slice(0, 10), -30);
     for (const de of dEstimates) {
       if (isDraft(de)) continue;
@@ -390,6 +391,10 @@ async function sync(db: SupabaseClient, dry: boolean) {
         !isDraft(i) && String(i.client_id) === String(de.client_id) &&
         Math.abs(num(i.summary_total) - total) < 1 && (day(i.date) ?? "") >= date);
       const accepted = bySource || !!byAmount;
+      // الفاتورة التي تحوّل إليها العرض (لربطها بالعرض وطلبه)
+      const srcInv = bySource
+        ? dInvoices.find((i) => String(i.source_id ?? "") === did && !isDraft(i))
+        : (byAmount || undefined);
       const status = accepted ? "accepted" : (date < monthAgo ? "expired" : "sent");
       r.details.push(`عرض ${number} (${total}): ${
         bySource ? "تحوّل لفاتورة" : byAmount ? `تحوّل لفاتورة ${byAmount.no} (نفس المبلغ)` : status === "expired" ? "منتهٍ (أقدم من ٣٠ يومًا)" : "بانتظار الرد"
@@ -399,12 +404,34 @@ async function sync(db: SupabaseClient, dry: boolean) {
         currency: String(de.currency_code || "SAR").slice(0, 3), status, sent_at: date, daftra_id: de.id,
       };
       const local = lQuotes.find((q) => String(q.daftra_id ?? "") === did) ?? lQuotes.find((q) => q.number === number);
+      let quoteId: string;
       if (local) {
+        quoteId = local.id;
         r.quotes.updated++;
         await write(db.from("quotes").update(fields).eq("id", local.id), `عرض ${number}`);
       } else {
         r.quotes.created++;
-        await write(db.from("quotes").insert({ ...fields, notes: de.notes ? String(de.notes).slice(0, 2000) : null }), `عرض ${number}`);
+        if (dry) {
+          quoteId = newId();
+        } else {
+          const { data, error } = await db.from("quotes")
+            .insert({ ...fields, notes: de.notes ? String(de.notes).slice(0, 2000) : null })
+            .select("id").single();
+          if (error) throw new Error(`عرض ${number}: ${error.message}`);
+          quoteId = data.id;
+        }
+      }
+      const invLocal = srcInv ? invByDaftra.get(String(srcInv.id)) : undefined;
+      if (invLocal) links.push({ invoice: invLocal, quote: quoteId, label: `${number} ← DF-${String(srcInv!.no ?? srcInv!.id).trim()}` });
+    }
+    // ربط كل فاتورة بعرضها، وتوحيد الطلب (طلب العرض يحمل الفاتورة ودفعاتها)
+    for (const l of links) {
+      if (dry) { r.details.push(`ربط ${l.label}`); continue; }
+      const { data, error } = await db.rpc("link_invoice_quote", { p_invoice: l.invoice, p_quote: l.quote });
+      if (error) { r.warnings.push(`ربط ${l.label}: ${error.message}`); continue; }
+      if (data && (data as Record<string, unknown>).changed) {
+        r.quotes.linked++;
+        r.details.push(`ربط ${l.label}`);
       }
     }
     for (const q of lQuotes) {
